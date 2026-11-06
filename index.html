@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Five live apps · ITSR FDP 2026 · Session 04</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#061326; --panel:#0B1F3A; --line:#1E3A5F; --ink:#E9F2FF; --muted:#93ABCB; --cyan:#22D3EE; --yellow:#FACC15; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 "IBM Plex Sans", system-ui, sans-serif; }
+  main { max-width:920px; margin:0 auto; padding:40px 20px 56px; }
+  .eyebrow { color:var(--cyan); font:600 14px/1 "IBM Plex Sans", sans-serif; letter-spacing:.14em; text-transform:uppercase; }
+  h1 { font:700 clamp(40px,7vw,64px)/1.02 "Barlow Condensed", sans-serif; margin:12px 0 10px; }
+  .sub { color:var(--muted); max-width:680px; margin:0 0 28px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+  a.card { display:block; text-decoration:none; color:inherit; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 18px 16px; transition:border-color .15s, transform .15s; }
+  a.card:hover, a.card:focus-visible { border-color:var(--cyan); transform:translateY(-2px); outline:none; }
+  .tag { display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
+  .tag b { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:7px; background:var(--cyan); color:var(--bg); font:700 16px/1 "Barlow Condensed", sans-serif; }
+  .card h2 { font:700 26px/1.1 "Barlow Condensed", sans-serif; margin:12px 0 6px; }
+  .card p { margin:0; color:var(--muted); font-size:15px; }
+  .go { margin-top:12px; color:var(--cyan); font-weight:600; font-size:14px; }
+  footer { margin-top:30px; color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">ITSR FDP 2026 · Session 04</div>
+  <h1>Five live apps</h1>
+  <p class="sub">Quantum-Enhanced Multi-Agent Decision-Making for Autonomous and Resilient Energy Networks. Dr. Lilia Tightiz, Sejong University.</p>
+  <div class="grid">
+    <a class="card" href="a/"><span class="tag"><b>A</b>Episode 3</span><h2>You Are the Agent</h2><p>One home, one battery, one day. Can you beat the AI?</p><div class="go">Open app A →</div></a>
+    <a class="card" href="b/"><span class="tag"><b>B</b>Episode 4</span><h2>Why Selfish Agents Crash the Grid</h2><p>One transformer, up to 120 EVs, three ways to charge.</p><div class="go">Open app B →</div></a>
+    <a class="card" href="c/"><span class="tag"><b>C</b>Episode 6</span><h2>A Brain That Spikes</h2><p>Feed a neuron and hear each spike. Sound on.</p><div class="go">Open app C →</div></a>
+    <a class="card" href="d/"><span class="tag"><b>D</b>Episode 7</span><h2>Qubits Pick the Chargers</h2><p>Four qubits pick two EVs out of 16 choices.</p><div class="go">Open app D →</div></a>
+    <a class="card" href="e/"><span class="tag"><b>E</b>Episodes 9 and 10</span><h2>Agent City Stress Test</h2><p>Ten microgrids, one storm day. Break things and compare two designs.</p><div class="go">Open app E →</div></a>
+  </div>
+  <footer>Each app runs in the browser, with no login and no install. Synthetic data, made for class use.</footer>
+</main>
+</body>
+</html>

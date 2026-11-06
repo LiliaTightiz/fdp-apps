@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>You Are the Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* One visual world: a night-shift grid control room. Navy base, cyan for the battery, solar yellow, rose for grid import. */
+  --bg: #061326;
+  --panel: #0b1f3a;
+  --panel-2: #0f2850;
+  --line: #1d3d68;
+  --ink: #e9f2ff;
+  --muted: #93abcb;
+  --accent: #22d3ee;
+  --accent-2: #2dd4bf;
+  --solar: #facc15;
+  --import: #fb7185;
+  --export: #4ade80;
+  --warn: #f59e0b;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* Layout: scene and live readouts on top, decision bar, then the two day charts. */
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); }
+body { min-height: 100%; }
+a { color: var(--accent); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.brand { display: grid; gap: 2px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+.tag { color: var(--muted); font-size: 15px; margin: 4px 0 0; }
+.daybar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--muted); }
+.chip b { color: var(--ink); font-weight: 600; }
+.chip input { width: 64px; background: transparent; border: 0; color: var(--ink); font-family: var(--font-mono); font-size: 14px; }
+.chip input:focus { outline: none; }
+.btn { font: 600 14px var(--font-body); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible, .act:focus-visible, .chip input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: #032031; border-color: var(--accent); }
+.top { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.scene { position: relative; overflow: hidden; }
+.scene canvas { display: block; width: 100%; height: auto; }
+.lasthour { padding: 8px 12px 10px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; align-content: start; }
+.tile { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; }
+.tile .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.tile .v { font-family: var(--font-mono); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12px; color: var(--muted); min-height: 16px; }
+.tile.clock .v { font-family: var(--font-display); font-size: 40px; letter-spacing: .02em; }
+.tile.alert { border-color: var(--import); box-shadow: 0 0 0 1px var(--import) inset; }
+.tile.alert .s { color: var(--import); }
+.meter { height: 8px; background: #0a1a33; border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.meter i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); width: 50%; }
+.decide { padding: 12px; display: grid; gap: 10px; }
+.decide .q { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; justify-content: space-between; }
+.decide .q h2 { margin: 0; font-family: var(--font-display); font-size: 24px; font-weight: 600; }
+.decide .q span { color: var(--muted); font-size: 13px; }
+.acts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.act { font: 600 15px var(--font-body); color: var(--ink); border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); padding: 14px 6px; cursor: pointer; display: grid; gap: 2px; justify-items: center; }
+.act small { font-family: var(--font-mono); font-weight: 400; color: var(--muted); font-size: 12px; }
+.act.dis { border-color: #1b6b78; }
+.act.chg { border-color: #6b5a12; }
+.act:hover, .act.preview { background: #143463; border-color: var(--accent); }
+.act:disabled { opacity: .45; cursor: default; }
+.toast { min-height: 18px; font-size: 13px; color: var(--warn); }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.chartcard { padding: 12px; display: grid; gap: 6px; }
+.chartcard h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.legend { display: inline-flex; gap: 12px; flex-wrap: wrap; font-size: 12px; font-weight: 400; }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+.chartcard canvas { width: 100%; height: 170px; display: block; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+.controls .grp { display: flex; flex-wrap: wrap; gap: 8px; }
+.results { padding: 16px; display: none; gap: 12px; }
+.results.show { display: grid; }
+.results h2 { margin: 0; font-family: var(--font-display); font-size: 30px; }
+.rank { display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: 200px minmax(0, 1fr) 210px; gap: 10px; align-items: center; }
+.row .nm { font-size: 14px; }
+.row .nm small { display: block; color: var(--muted); font-size: 12px; }
+.bar { height: 22px; background: #0a1a33; border-radius: 6px; border: 1px solid var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; }
+.row .num { font-family: var(--font-mono); font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+.row.you .nm { color: var(--accent); font-weight: 600; }
+.lesson { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.lesson div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; color: var(--muted); }
+.lesson b { color: var(--ink); display: block; margin-bottom: 4px; }
+details { padding: 12px 16px; }
+details summary { cursor: pointer; font-weight: 600; }
+details .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.eq { font-family: var(--font-mono); color: var(--ink); background: #0a1a33; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: block; margin: 6px 0; font-size: 13px; overflow-x: auto; white-space: nowrap; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 4px 0 10px; }
+@media (max-width: 880px) {
+  .top, .charts { grid-template-columns: 1fr; }
+  .lesson { grid-template-columns: 1fr; }
+  details .cols { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 110px minmax(0, 1fr) 150px; }
+  .row .num { font-size: 12px; }
+}
+@media (max-width: 520px) {
+  .acts { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+  .act { font-size: 12px; padding: 10px 2px; }
+  .act small { font-size: 10px; }
+  .tile .v { font-size: 21px; }
+  .tile.clock .v { font-size: 32px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="eyebrow">Episode 3 · Plans under uncertainty</span>
+      <h1>You Are the Agent</h1>
+      <p class="tag">One home. One battery. One day. Each hour you decide. Can you beat the AI?</p>
+    </div>
+    <div class="daybar">
+      <label class="chip" for="code">Day code <input id="code" inputmode="numeric" value="1132" aria-label="Day code"></label>
+      <span class="chip" id="daytype">Sunny</span>
+      <span class="chip"><b>6 kWh</b> battery · <b>2.5 kW</b> · <b>4 kWp</b> solar</span>
+    </div>
+  </header>
+
+  <div class="top">
+    <div class="card scene">
+      <canvas id="scene" width="720" height="380" aria-label="Animated energy flows between solar panel, battery, home and grid"></canvas>
+      <div class="lasthour" id="lasthour">06:00 · The day starts with the battery at 50 %.</div>
+    </div>
+    <div class="card tiles" aria-live="polite">
+      <div class="tile clock"><span class="k">Time</span><span class="v" id="tClock">06:00</span><span class="s" id="tLeft">24 decisions left</span></div>
+      <div class="tile" id="tilePrice"><span class="k">Price now</span><span class="v" id="tPrice">₹7.3</span><span class="s" id="tPriceS">per kWh · forecast ₹7.3</span></div>
+      <div class="tile"><span class="k">Solar now</span><span class="v" id="tPv">0.0 kW</span><span class="s" id="tPvS">forecast 0.0 kW</span></div>
+      <div class="tile"><span class="k">Home load</span><span class="v" id="tLoad">0.7 kW</span><span class="s" id="tLoadS">forecast 0.7 kW</span></div>
+      <div class="tile"><span class="k">Battery</span><span class="v" id="tSoc">3.0 kWh</span><div class="meter"><i id="tSocBar"></i></div></div>
+      <div class="tile"><span class="k">Bill so far</span><span class="v" id="tBill">₹0.0</span><span class="s" id="tBillS">no battery: ₹0.0</span></div>
+    </div>
+  </div>
+
+  <div class="card decide" id="decide">
+    <div class="q"><h2 id="qText">06:00. What does the battery do this hour?</h2><span>Prices after now are forecasts. Surprises happen.</span></div>
+    <div class="acts" role="group" aria-label="Battery action for this hour">
+      <button class="act dis" data-b="-2.5" id="a0">Discharge<small>2.5 kW</small></button>
+      <button class="act dis" data-b="-1.25" id="a1">Discharge<small>1.25 kW</small></button>
+      <button class="act" data-b="0" id="a2">Hold<small>0 kW</small></button>
+      <button class="act chg" data-b="1.25" id="a3">Charge<small>1.25 kW</small></button>
+      <button class="act chg" data-b="2.5" id="a4">Charge<small>2.5 kW</small></button>
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+    <div class="controls">
+      <div class="grp">
+        <button class="btn" id="btnWatch">Watch the AI play</button>
+        <button class="btn" id="btnRestart">Restart this day</button>
+        <button class="btn" id="btnNew">New day</button>
+      </div>
+      <span class="chip">Score = share of the best possible savings</span>
+    </div>
+  </div>
+
+  <div class="card results" id="results" aria-live="polite">
+    <h2 id="resTitle">Day complete</h2>
+    <div class="rank" id="rank"></div>
+    <div class="lesson">
+      <div><b>The oracle sees the whole day.</b>It knows every cloud and every price spike in advance. No agent can beat it. It marks 100 %.</div>
+      <div><b>The AI sees only forecasts.</b>It solves an exact plan for the rest of the day, acts for one hour, then plans again with the new data. The faint lines show its 24 plans.</div>
+      <div><b>The rule acts at once.</b>It stores solar and spends it as soon as the sun fades, often before the evening peak.</div>
+    </div>
+    <div class="controls">
+      <div class="grp">
+        <button class="btn primary" id="btnCopy">Copy my score</button>
+        <button class="btn" id="btnAgain">Play this day again</button>
+        <button class="btn" id="btnNew2">New day</button>
+      </div>
+      <span class="chip" id="copyNote">Post your score in the chat</span>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="card chartcard">
+      <h3>Price (₹/kWh)<span class="legend"><span><i style="background:#93abcb"></i>forecast</span><span><i style="background:#f59e0b"></i>actual</span></span></h3>
+      <canvas id="cPrice" aria-label="Price forecast and actual price for the day"></canvas>
+    </div>
+    <div class="card chartcard">
+      <h3>Battery energy (kWh)<span class="legend"><span><i style="background:#22d3ee"></i>you</span><span><i style="background:#2dd4bf;opacity:.8"></i>AI</span><span><i style="background:#e9f2ff"></i>oracle</span></span></h3>
+      <canvas id="cSoc" aria-label="Battery energy over the day"></canvas>
+    </div>
+  </div>
+
+  <details class="card">
+    <summary>How the agents decide (model and equations)</summary>
+    <div class="cols">
+      <div>
+        <p><b>State</b> at hour t: battery energy s<sub>t</sub>, the hour, the price, solar and load now, and forecasts for later hours. <b>Action</b>: AC battery power b<sub>t</sub> in kW (plus is charge). One step is one hour.</p>
+        <span class="eq">grid g_t = load_t − pv_t + b_t</span>
+        <span class="eq">s_t+1 = s_t + 0.95·b_t  (charge)    s_t+1 = s_t + b_t / 0.95  (discharge)</span>
+        <span class="eq">cost_t = price_t · g_t if g_t &gt; 0,  else ₹3.0 · g_t (export credit)</span>
+        <p>Limits: 0.6 ≤ s ≤ 6.0 kWh, |b| ≤ 2.5 kW. A safety layer clips any request that breaks a limit. Energy left at 06:00 next day is valued at ₹7.0 per kWh, so an empty battery is not free.</p>
+        <span class="eq">V_t(s) = min_b [ cost_t(s, b) + V_t+1(s') ]   (Bellman)</span>
+      </div>
+      <div>
+        <p><b>Oracle.</b> One exact linear program over all 24 hours with the true prices, solar and load. It is the best result any agent can reach on this day.</p>
+        <p><b>AI agent (MPC).</b> Model predictive control. Each hour the same linear program is solved for the rest of the day, with the true values for this hour and forecasts for later hours. Only the first action is applied. Then the plan is made again.</p>
+        <p><b>Self-use rule.</b> Solar surplus charges the battery; any deficit is covered from the battery. No grid charge. This mode is a common factory default.</p>
+        <p><b>Checks.</b> The browser LP solver (two-phase simplex, Bland rule) matches the HiGHS solver to 1e-13 ₹ on 40 test days. Over 300 random days the AI reaches 96.5 % of the oracle savings on average and the rule 74 %.</p>
+        <p>All data are synthetic and illustrative: a ToD-style tariff with a cheap solar window and an evening peak, a 4 kWp roof, a 6 kWh battery. References: Bellman (1957); Rawlings, Mayne and Diehl (2017) <i>Model Predictive Control</i>; Sutton and Barto (2018) <i>Reinforcement Learning</i>.</p>
+      </div>
+    </div>
+  </details>
+  <footer>ITSR FDP 2026 · Session 04 · Dr. Lilia Tightiz, Sejong University · Synthetic data, made for class use</footer>
+</div>
+
+<script>// Dense two-phase primal simplex with Bland's rule (no cycling).
+// Solves: minimize c^T x  subject to  A x = b,  x >= 0.
+// A: array of rows (plain arrays or Float64Array), b: array, c: array.
+// Returns { status: 'optimal' | 'infeasible' | 'unbounded', x, value, iters }.
+var LP = (function () {
+  'use strict';
+  var EPS = 1e-9;
+
+  function solve(A, b, c, maxIter) {
+    var m = A.length, n = c.length, W = n + m + 1, R = W - 1;
+    maxIter = maxIter || 20000;
+    var T = new Float64Array((m + 1) * W);
+    var basis = new Int32Array(m);
+    var i, j, k;
+    for (i = 0; i < m; i++) {
+      var sg = b[i] < 0 ? -1 : 1, row = A[i], off = i * W;
+      for (j = 0; j < n; j++) T[off + j] = sg * row[j];
+      T[off + n + i] = 1;
+      T[off + R] = sg * b[i];
+      basis[i] = n + i;
+    }
+    var O = m * W; // objective row offset
+    // Phase 1: minimize sum of artificials
+    for (j = 0; j <= R; j++) T[O + j] = 0;
+    for (i = 0; i < m; i++) {
+      var off2 = i * W;
+      for (j = 0; j < n; j++) T[O + j] -= T[off2 + j];
+      T[O + R] -= T[off2 + R];
+    }
+    var iters = 0;
+
+    function pivot(r, s) {
+      var offr = r * W, pv = T[offr + s], jj, ii;
+      for (jj = 0; jj < W; jj++) T[offr + jj] /= pv;
+      for (ii = 0; ii <= m; ii++) {
+        if (ii === r) continue;
+        var offi = ii * W, f = T[offi + s];
+        if (f === 0) continue;
+        for (jj = 0; jj < W; jj++) T[offi + jj] -= f * T[offr + jj];
+      }
+      basis[r] = s;
+    }
+
+    function run(limitCol) {
+      while (iters < maxIter) {
+        iters++;
+        var s = -1;
+        for (var jj = 0; jj < limitCol; jj++) if (T[O + jj] < -EPS) { s = jj; break; } // Bland
+        if (s < 0) return 'optimal';
+        var r = -1, best = Infinity, bestB = Infinity;
+        for (var ii = 0; ii < m; ii++) {
+          var a = T[ii * W + s];
+          if (a > EPS) {
+            var ratio = T[ii * W + R] / a;
+            if (ratio < best - 1e-12 || (Math.abs(ratio - best) <= 1e-12 && basis[ii] < bestB)) {
+              best = ratio; r = ii; bestB = basis[ii];
+            }
+          }
+        }
+        if (r < 0) return 'unbounded';
+        pivot(r, s);
+      }
+      return 'iterlimit';
+    }
+
+    var st = run(n + m);
+    if (st !== 'optimal') return { status: st, iters: iters };
+    if (-T[O + R] > 1e-7) return { status: 'infeasible', iters: iters };
+    // Drive artificials out of the basis where possible
+    for (i = 0; i < m; i++) {
+      if (basis[i] >= n) {
+        var off3 = i * W, piv = -1;
+        for (j = 0; j < n; j++) if (Math.abs(T[off3 + j]) > 1e-7) { piv = j; break; }
+        if (piv >= 0) pivot(i, piv);
+      }
+    }
+    // Phase 2 objective row
+    for (j = 0; j <= R; j++) T[O + j] = 0;
+    for (j = 0; j < n; j++) T[O + j] = c[j];
+    for (i = 0; i < m; i++) {
+      var bj = basis[i];
+      var cb = bj < n ? c[bj] : 0;
+      if (cb === 0) continue;
+      var off4 = i * W;
+      for (j = 0; j <= R; j++) T[O + j] -= cb * T[off4 + j];
+    }
+    // Artificial columns may not re-enter: scan only original columns
+    st = run(n);
+    if (st !== 'optimal') return { status: st, iters: iters };
+    var x = new Float64Array(n);
+    for (i = 0; i < m; i++) if (basis[i] < n) x[basis[i]] = T[i * W + R];
+    var val = 0;
+    for (j = 0; j < n; j++) val += c[j] * x[j];
+    return { status: 'optimal', x: x, value: val, iters: iters };
+  }
+
+  return { solve: solve };
+})();
+if (typeof module !== 'undefined') module.exports = LP;
+</script>
+<script>// Battery game engine: scenario generator, DP oracle, MPC agent, rule agent.
+// Pure functions. Same code runs in the page and in the Node tests.
+var BatteryEngine = (function () {
+  'use strict';
+
+  var CFG = {
+    T: 24,            // decisions per day (hourly)
+    start: 6,         // first decision at 06:00
+    smin: 0.6,        // kWh (10 % of 6 kWh)
+    smax: 6.0,        // kWh
+    s0: 3.0,          // kWh at 06:00
+    pmax: 2.5,        // kW, AC side, charge and discharge
+    etaC: 0.95,
+    etaD: 0.95,
+    ds: 0.25,         // kWh grid step for DP
+    kWp: 4.0,         // rooftop PV size
+    sell: 3.0,        // Rs/kWh export price (net billing, illustrative)
+    pTerm: 7.0,       // Rs/kWh value of energy left at 06:00 next day
+    loadScale: 0.85
+  };
+
+  var LOAD = [0.45, 0.40, 0.38, 0.38, 0.40, 0.50, 0.80, 1.20, 1.10, 0.80, 0.70, 0.75,
+              0.85, 0.90, 0.90, 0.85, 0.90, 1.10, 1.50, 1.80, 1.90, 1.70, 1.20, 0.70];
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(r) {
+    var u = 0, v = 0;
+    while (u === 0) u = r();
+    while (v === 0) v = r();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+  function r2(x) { return Math.round(x * 100) / 100; }
+
+  // Time-of-day tariff shape (Rs/kWh, illustrative)
+  function tod(h) {
+    if (h >= 10 && h < 16) return 5.6;   // cheap solar window
+    if (h >= 18 && h < 22) return 8.4;   // evening peak
+    return 7.0;
+  }
+  // Day-ahead forecast shape on top of the ToD steps
+  var SHAPE = { 7: 0.3, 8: 0.3, 18: -0.3, 19: 0.2, 20: 0.4, 21: 0.0 };
+  function forecastPrice(h) { return Math.round((tod(h) + (SHAPE[h] || 0)) * 10) / 10; }
+  // Clear-sky PV output per kWp for the hour that starts at clock hour h
+  function clearSky(h) {
+    var mid = h + 0.5, rise = 6.2, set = 18.4;
+    if (mid <= rise || mid >= set) return 0;
+    var x = Math.PI * (mid - rise) / (set - rise);
+    return 0.70 * Math.pow(Math.sin(x), 1.3);
+  }
+
+  var DAYTYPES = {
+    sunny:  { label: 'Sunny',  mean: 0.95, ev: 0.06 },
+    hazy:   { label: 'Hazy',   mean: 0.78, ev: 0.14 },
+    cloudy: { label: 'Monsoon cloud', mean: 0.50, ev: 0.25 }
+  };
+
+  // Build one day. Index t = 0..23 maps to clock hour (start + t) % 24.
+  function makeDay(code) {
+    var seed = (Number(code) * 2654435761) >>> 0;
+    var r = mulberry32(seed || 1);
+    var u = r();
+    var type = u < 0.45 ? 'sunny' : (u < 0.78 ? 'hazy' : 'cloudy');
+    var dt = DAYTYPES[type];
+    var ev = r();
+    var event = ev < 0.5 ? 'spike' : (ev < 0.75 ? 'dip' : 'none');
+    var spikeStart = 16 + Math.floor(r() * 6);          // 16..21
+    var spikeAmt = Math.round((3 + 3 * r()) * 10) / 10; // +3..+6 Rs
+    var dipAmt = Math.round((2 + 1 * r()) * 10) / 10;   // -2..-3 Rs
+    var spikeDay = event === 'spike';
+    var hours = [], pvF = [], pvA = [], ldF = [], ldA = [], prF = [], prA = [];
+    var evLeft = 0, evFac = 1;
+    for (var t = 0; t < CFG.T; t++) {
+      var h = (CFG.start + t) % 24;
+      hours.push(h);
+      var cs = CFG.kWp * clearSky(h);
+      pvF.push(r2(cs * dt.mean));
+      if (evLeft <= 0 && cs > 0 && r() < dt.ev) { evLeft = 1 + Math.floor(r() * 3); evFac = 0.25 + 0.35 * r(); }
+      var cf = clamp(dt.mean + 0.06 * gauss(r), 0, 1);
+      if (evLeft > 0) { cf *= evFac; evLeft--; }
+      pvA.push(r2(cs * cf));
+      var lf = LOAD[h] * CFG.loadScale;
+      ldF.push(r2(lf));
+      var la = lf * (1 + 0.12 * gauss(r));
+      if (r() < 0.07) la += 0.5 + 0.7 * r();
+      ldA.push(r2(Math.max(0.15, la)));
+      var pf = forecastPrice(h);
+      prF.push(pf);
+      var pa = pf + 0.15 * gauss(r);
+      if (event === 'spike' && (h === spikeStart || h === spikeStart + 1)) pa += spikeAmt;
+      if (event === 'dip' && h >= 12 && h <= 14) pa -= dipAmt;
+      prA.push(Math.round(Math.max(CFG.sell + 0.2, pa) * 10) / 10); // import price never below export price
+    }
+    return {
+      code: Number(code), type: type, typeLabel: dt.label, event: event, spikeDay: spikeDay,
+      spikeAmt: event === 'spike' ? spikeAmt : 0, spikeStart: event === 'spike' ? spikeStart : null,
+      dipAmt: event === 'dip' ? dipAmt : 0,
+      hours: hours, pvF: pvF, pvA: pvA, ldF: ldF, ldA: ldA, prF: prF, prA: prA
+    };
+  }
+
+  function stageCost(load, pv, b, price) {
+    var g = load - pv + b;
+    return g > 0 ? price * g : CFG.sell * g;
+  }
+  function nextSoc(s, b) { return b >= 0 ? s + b * CFG.etaC : s + b / CFG.etaD; }
+  // Feasible AC power range at SoC s
+  function limits(s) {
+    var maxC = Math.max(0, Math.min(CFG.pmax, (CFG.smax - s) / CFG.etaC));
+    var maxD = Math.max(0, Math.min(CFG.pmax, (s - CFG.smin) * CFG.etaD));
+    return { maxC: maxC, maxD: maxD };
+  }
+  // Safety shield: project a requested action onto the feasible set
+  function shield(s, bReq) {
+    var L = limits(s);
+    var b = clamp(bReq, -L.maxD, L.maxC);
+    return { b: b, clipped: Math.abs(b - bReq) > 1e-9 };
+  }
+
+  var K = Math.round((CFG.smax - CFG.smin) / CFG.ds) + 1; // 37 levels
+  function S(k) { return CFG.smin + k * CFG.ds; }
+  function kOf(s) { return Math.round((s - CFG.smin) / CFG.ds); }
+  // AC power needed to move from level k to level k2 (NaN if not feasible)
+  function powerFor(k, k2) {
+    var d = (k2 - k) * CFG.ds;
+    var b = d >= 0 ? d / CFG.etaC : d * CFG.etaD;
+    return Math.abs(b) <= CFG.pmax + 1e-9 ? b : NaN;
+  }
+
+  // Exact DP on the SoC grid over t = tFrom..T-1. Arrays are full length T.
+  function solveDP(pv, load, price, tFrom, kStart) {
+    var T = CFG.T, V = new Float64Array(K), Vn = new Float64Array(K), choice = [];
+    for (var k = 0; k < K; k++) V[k] = CFG.pTerm * (CFG.s0 - S(k));
+    for (var t = T - 1; t >= tFrom; t--) {
+      var ch = new Int16Array(K);
+      for (var k1 = 0; k1 < K; k1++) {
+        var best = Infinity, bk = k1;
+        var lo = Math.max(0, k1 - 12), hi = Math.min(K - 1, k1 + 12);
+        for (var k2 = lo; k2 <= hi; k2++) {
+          var b = powerFor(k1, k2);
+          if (b !== b) continue;
+          var c = stageCost(load[t], pv[t], b, price[t]) + V[k2];
+          if (c < best - 1e-12) { best = c; bk = k2; }
+        }
+        Vn[k1] = best; ch[k1] = bk;
+      }
+      choice[t] = ch;
+      var tmp = V; V = Vn; Vn = tmp;
+    }
+    var path = [kStart], kk = kStart;
+    for (var t2 = tFrom; t2 < T; t2++) { kk = choice[t2][kk]; path.push(kk); }
+    return { value: V[kStart], path: path };
+  }
+
+
+  // Exact LP schedule over t = tFrom..T-1 (continuous actions). Needs LP (lp.js).
+  var LPS = (typeof LP !== 'undefined') ? LP : (typeof require !== 'undefined' ? require('./lp.js') : null);
+  function solveLP(pv, load, price, tFrom, sStart) {
+    var H = CFG.T - tFrom, n = 6 * H + 2 * (H + 1), rows = [], rhs = [];
+    function z() { return new Float64Array(n); }
+    function ic(t) { return 6 * t; } function id(t) { return 6 * t + 1; }
+    function iu(t) { return 6 * t + 2; } function iv(t) { return 6 * t + 3; }
+    function ii(t) { return 6 * t + 4; } function ie(t) { return 6 * t + 5; }
+    function is(t) { return 6 * H + t; } function iw(t) { return 6 * H + H + 1 + t; }
+    var t, r;
+    for (t = 0; t < H; t++) { r = z(); r[ic(t)] = 1; r[iu(t)] = 1; rows.push(r); rhs.push(CFG.pmax); }
+    for (t = 0; t < H; t++) { r = z(); r[id(t)] = 1; r[iv(t)] = 1; rows.push(r); rhs.push(CFG.pmax); }
+    for (t = 0; t <= H; t++) { r = z(); r[is(t)] = 1; r[iw(t)] = 1; rows.push(r); rhs.push(CFG.smax - CFG.smin); }
+    r = z(); r[is(0)] = 1; rows.push(r); rhs.push(Math.max(0, sStart - CFG.smin));
+    for (t = 0; t < H; t++) {
+      r = z(); r[is(t + 1)] = 1; r[is(t)] = -1; r[ic(t)] = -CFG.etaC; r[id(t)] = 1 / CFG.etaD;
+      rows.push(r); rhs.push(0);
+    }
+    for (t = 0; t < H; t++) {
+      var tt = tFrom + t;
+      r = z(); r[ii(t)] = 1; r[ie(t)] = -1; r[ic(t)] = -1; r[id(t)] = 1;
+      rows.push(r); rhs.push(load[tt] - pv[tt]);
+    }
+    var c = new Float64Array(n);
+    for (t = 0; t < H; t++) { c[ii(t)] = price[tFrom + t]; c[ie(t)] = -CFG.sell; }
+    c[is(H)] = -CFG.pTerm;
+    var sol = LPS.solve(rows, rhs, c);
+    if (sol.status !== 'optimal') throw new Error('LP ' + sol.status);
+    var b = [], soc = [], both = 0;
+    for (t = 0; t < H; t++) {
+      var cc = sol.x[ic(t)], dd = sol.x[id(t)];
+      both = Math.max(both, Math.min(cc, dd));
+      b.push(cc - dd);
+    }
+    for (t = 0; t <= H; t++) soc.push(CFG.smin + sol.x[is(t)]);
+    return { b: b, soc: soc, value: sol.value + CFG.pTerm * (CFG.s0 - CFG.smin), iters: sol.iters, both: both };
+  }
+
+  // Simulate a sequence of AC actions against the actual day. Returns full trace.
+  function simulate(day, actionFn) {
+    var s = CFG.s0, cost = 0, tr = [];
+    for (var t = 0; t < CFG.T; t++) {
+      var req = actionFn(t, s);
+      var sh = shield(s, req);
+      var b = sh.b;
+      var c = stageCost(day.ldA[t], day.pvA[t], b, day.prA[t]);
+      var s2 = nextSoc(s, b);
+      if (s2 < CFG.smin) s2 = CFG.smin; if (s2 > CFG.smax) s2 = CFG.smax; // float guard
+      tr.push({ t: t, s: s, b: b, req: req, clipped: sh.clipped, cost: c,
+                grid: day.ldA[t] - day.pvA[t] + b, s2: s2 });
+      cost += c; s = s2;
+    }
+    var term = CFG.pTerm * (CFG.s0 - s);
+    return { trace: tr, energyCost: cost, terminal: term, total: cost + term, sEnd: s };
+  }
+
+  function noBattery(day) { return simulate(day, function () { return 0; }); }
+
+  function selfConsumption(day) {
+    return simulate(day, function (t, s) {
+      var surplus = day.pvA[t] - day.ldA[t];
+      var L = limits(s);
+      return surplus > 0 ? Math.min(surplus, L.maxC) : -Math.min(-surplus, L.maxD);
+    });
+  }
+
+  function oracle(day) {
+    var sol = solveLP(day.pvA, day.ldA, day.prA, 0, CFG.s0);
+    var res = simulate(day, function (t) { return sol.b[t]; });
+    res.lpValue = sol.value; res.both = sol.both; res.plan = sol.soc;
+    return res;
+  }
+
+  // MPC: re-plan every hour; the current hour is known, later hours use forecasts.
+  function mpc(day) {
+    var plans = [];
+    var res = simulate(day, function (t, s) {
+      var pv = day.pvF.slice(), ld = day.ldF.slice(), pr = day.prF.slice();
+      pv[t] = day.pvA[t]; ld[t] = day.ldA[t]; pr[t] = day.prA[t];
+      var sol = solveLP(pv, ld, pr, t, s);
+      plans.push(sol.soc);
+      return sol.b[0];
+    });
+    res.plans = plans;
+    return res;
+  }
+
+  // Next MPC action for a live state (used by "Watch the AI" and hints)
+  function mpcAction(day, t, s) {
+    var pv = day.pvF.slice(), ld = day.ldF.slice(), pr = day.prF.slice();
+    pv[t] = day.pvA[t]; ld[t] = day.ldA[t]; pr[t] = day.prA[t];
+    var sol = solveLP(pv, ld, pr, t, s);
+    return { b: sol.b[0], plan: sol.soc };
+  }
+
+  function scoreAll(day, humanTrace) {
+    var nb = noBattery(day), rule = selfConsumption(day), ai = mpc(day), orc = oracle(day);
+    var base = nb.total;
+    function pack(name, r) {
+      var sav = base - r.total;
+      return { name: name, total: r.total, savings: sav, res: r };
+    }
+    var out = { nb: pack('No battery', nb), rule: pack('Self-use rule', rule),
+                ai: pack('AI agent (MPC)', ai), oracle: pack('Oracle', orc) };
+    if (humanTrace) out.you = pack('You', humanTrace);
+    var os = out.oracle.savings;
+    ['rule', 'ai', 'oracle', 'you'].forEach(function (k) {
+      if (out[k]) out[k].pct = os > 1e-9 ? 100 * out[k].savings / os : 0;
+    });
+    return out;
+  }
+
+  return {
+    CFG: CFG, tod: tod, forecastPrice: forecastPrice, clearSky: clearSky, makeDay: makeDay, stageCost: stageCost,
+    nextSoc: nextSoc, limits: limits, shield: shield, solveDP: solveDP, simulate: simulate,
+    noBattery: noBattery, selfConsumption: selfConsumption, oracle: oracle, mpc: mpc,
+    mpcAction: mpcAction, scoreAll: scoreAll, solveLP: solveLP, S: S, kOf: kOf, K: K, powerFor: powerFor
+  };
+})();
+if (typeof module !== 'undefined') module.exports = BatteryEngine;
+</script>
+<script>
+(function () {
+  'use strict';
+  var E = BatteryEngine, C = E.CFG;
+  var $ = function (id) { return document.getElementById(id); };
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var day, ref, t, s, trace, bill, billNb, mode, watchTimer, previewB = 0, lastStep = null, finished = false;
+
+  function hh(h) { return (h < 10 ? '0' : '') + h + ':00'; }
+  function rs(x) { return (x < 0 ? '−₹' : '₹') + Math.abs(x).toFixed(1); }
+
+  function newDay(code) {
+    stopWatch();
+    day = E.makeDay(code);
+    ref = E.scoreAll(day, null);
+    $('code').value = day.code;
+    $('daytype').innerHTML = '<b>' + day.typeLabel + '</b> · surprise risk';
+    restart();
+  }
+  function restart() {
+    stopWatch();
+    t = 0; s = C.s0; trace = []; bill = 0; billNb = 0; mode = 'you'; finished = false; lastStep = null; previewB = 0;
+    $('results').classList.remove('show');
+    $('decide').style.display = '';
+    setButtons(true);
+    $('toast').textContent = '';
+    $('lasthour').textContent = hh(day.hours[0]) + ' · The day starts with the battery at 50 %.';
+    render();
+  }
+
+  function applyAction(bReq, who) {
+    if (finished) return;
+    var sh = E.shield(s, bReq), b = sh.b;
+    var c = E.stageCost(day.ldA[t], day.pvA[t], b, day.prA[t]);
+    var cNb = E.stageCost(day.ldA[t], day.pvA[t], 0, day.prA[t]);
+    var s2 = Math.min(C.smax, Math.max(C.smin, E.nextSoc(s, b)));
+    trace.push({ t: t, s: s, b: b, req: bReq, clipped: sh.clipped, cost: c, s2: s2 });
+    lastStep = { h: day.hours[t], b: b, c: c, clipped: sh.clipped, pv: day.pvA[t], ld: day.ldA[t] };
+    bill += c; billNb += cNb; s = s2; t++;
+    var verb = b > 0.01 ? 'charged ' + b.toFixed(2) + ' kW' : (b < -0.01 ? 'discharged ' + (-b).toFixed(2) + ' kW' : 'held');
+    $('lasthour').textContent = hh(lastStep.h) + ' · ' + (who === 'ai' ? 'the AI ' : 'you ') + verb + ' · hour cost ' + rs(c) + (sh.clipped ? ' · clipped by the safety layer' : '');
+    $('toast').textContent = sh.clipped ? 'The safety layer clipped the request to ' + b.toFixed(2) + ' kW: the battery limit is ' + (b >= 0 ? 'full.' : 'empty.') : '';
+    if (t >= C.T) finish();
+    render();
+  }
+
+  function finish() {
+    finished = true; setButtons(false);
+    var term = C.pTerm * (C.s0 - s);
+    var mine = { trace: trace, energyCost: bill, terminal: term, total: bill + term, sEnd: s };
+    var sc = E.scoreAll(day, mine);
+    ref.you = sc.you; ref.mine = mine;
+    showResults(sc);
+  }
+
+  function showResults(sc) {
+    var rows = [
+      { k: 'oracle', nm: 'Oracle', sub: 'knows the whole day', col: '#e9f2ff' },
+      { k: 'ai', nm: 'AI agent (MPC)', sub: 're-plans every hour', col: '#2dd4bf' },
+      { k: 'you', nm: mode === 'ai' ? 'AI replay' : 'You', sub: mode === 'ai' ? 'the run you watched' : 'your 24 decisions', col: '#22d3ee', you: true },
+      { k: 'rule', nm: 'Self-use rule', sub: 'common default', col: '#facc15' },
+      { k: 'nb', nm: 'No battery', sub: 'reference bill', col: '#93abcb' }
+    ];
+    var maxSav = Math.max(1, sc.oracle.savings);
+    var html = '';
+    rows.forEach(function (r) {
+      var o = sc[r.k]; if (!o) return;
+      var pct = r.k === 'nb' ? 0 : Math.max(-100, o.pct);
+      var w = Math.max(0, Math.min(100, 100 * o.savings / maxSav));
+      html += '<div class="row' + (r.you ? ' you' : '') + '"><div class="nm">' + r.nm + '<small>' + r.sub + '</small></div>' +
+        '<div class="bar"><i style="width:' + w.toFixed(1) + '%;background:' + r.col + '"></i></div>' +
+        '<div class="num">' + (r.k === 'nb' ? 'bill ' + rs(o.total) : pct.toFixed(0) + ' % · saves ' + rs(o.savings)) + '</div></div>';
+    });
+    $('rank').innerHTML = html;
+    var p = sc.you ? sc.you.pct : 0;
+    $('resTitle').textContent = mode === 'ai' ? 'AI replay complete: ' + p.toFixed(0) + ' %' :
+      (p >= sc.ai.pct - 0.5 ? 'You matched the AI: ' : (p >= sc.rule.pct ? 'You beat the rule: ' : 'Day complete: ')) + p.toFixed(0) + ' %';
+    $('results').classList.add('show');
+    $('decide').style.display = 'none';
+    $('copyNote').textContent = 'Day ' + day.code + ' · ' + (mode === 'ai' ? 'AI replay' : 'You') + ' ' + p.toFixed(0) + ' % · AI ' + sc.ai.pct.toFixed(0) + ' % · rule ' + sc.rule.pct.toFixed(0) + ' %';
+  }
+
+  function setButtons(on) { for (var i = 0; i < 5; i++) $('a' + i).disabled = !on; }
+
+  function stopWatch() { if (watchTimer) { clearInterval(watchTimer); watchTimer = null; } }
+  function watchAI() {
+    restart(); mode = 'ai'; setButtons(false);
+    watchTimer = setInterval(function () {
+      if (t >= C.T) { stopWatch(); return; }
+      var a = E.mpcAction(day, t, s);
+      applyAction(a.b, 'ai');
+    }, reduce ? 250 : 700);
+  }
+
+  // ---------- live tiles ----------
+  function render() {
+    var i = Math.min(t, C.T - 1), h = day.hours[i];
+    var done = t >= C.T;
+    $('tClock').textContent = done ? '06:00' : hh(h);
+    $('tLeft').textContent = done ? 'day complete' : (C.T - t) + ' decisions left';
+    var pa = day.prA[i], pf = day.prF[i];
+    $('tPrice').textContent = '₹' + pa.toFixed(1);
+    var dev = pa - pf;
+    $('tPriceS').textContent = Math.abs(dev) >= 1.5 ? (dev > 0 ? 'SPIKE: ₹' + dev.toFixed(1) + ' above forecast' : 'DIP: ₹' + (-dev).toFixed(1) + ' below forecast') : 'per kWh · forecast ₹' + pf.toFixed(1);
+    $('tilePrice').classList.toggle('alert', Math.abs(dev) >= 1.5);
+    $('tPv').textContent = day.pvA[i].toFixed(2) + ' kW';
+    $('tPvS').textContent = 'forecast ' + day.pvF[i].toFixed(2) + ' kW';
+    $('tLoad').textContent = day.ldA[i].toFixed(2) + ' kW';
+    $('tLoadS').textContent = 'forecast ' + day.ldF[i].toFixed(2) + ' kW';
+    $('tSoc').textContent = s.toFixed(2) + ' kWh';
+    $('tSocBar').style.width = (100 * s / C.smax).toFixed(1) + '%';
+    $('tBill').textContent = rs(bill);
+    $('tBillS').textContent = 'no battery: ' + rs(billNb);
+    $('qText').textContent = done ? 'Day complete.' : hh(h) + '. What does the battery do this hour?';
+    drawCharts();
+  }
+
+  // ---------- scene ----------
+  var cv = $('scene'), cx = cv.getContext('2d');
+  var W = 720, H = 380, dpr = 1;
+  function fitScene() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = W * dpr; cv.height = H * dpr;
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  var PATHS = {
+    pvHome:   [[345, 152], [345, 178], [356, 200], [360, 226]],
+    pvBatt:   [[318, 140], [250, 112], [176, 140], [150, 196]],
+    pvGrid:   [[392, 134], [470, 92], [560, 116], [598, 166]],
+    battHome: [[172, 252], [222, 252], [282, 244], [334, 242]],
+    gridHome: [[592, 214], [520, 240], [452, 242], [392, 242]],
+    gridBatt: [[592, 236], [480, 334], [250, 334], [160, 294]],
+    battGrid: [[160, 294], [250, 334], [480, 334], [592, 236]]
+  };
+  var COLORS = { pvHome: '#facc15', pvBatt: '#facc15', pvGrid: '#4ade80', battHome: '#22d3ee', gridHome: '#fb7185', gridBatt: '#fb7185', battGrid: '#4ade80' };
+  function bez(p, u) {
+    var a = 1 - u;
+    return [a * a * a * p[0][0] + 3 * a * a * u * p[1][0] + 3 * a * u * u * p[2][0] + u * u * u * p[3][0],
+            a * a * a * p[0][1] + 3 * a * a * u * p[1][1] + 3 * a * u * u * p[2][1] + u * u * u * p[3][1]];
+  }
+  function flowsFor(pv, ld, b) {
+    var f = { pvHome: 0, pvBatt: 0, pvGrid: 0, battHome: 0, gridHome: 0, gridBatt: 0, battGrid: 0 };
+    f.pvHome = Math.min(pv, ld);
+    var pvLeft = pv - f.pvHome, ldLeft = ld - f.pvHome;
+    if (b > 0) { f.pvBatt = Math.min(pvLeft, b); pvLeft -= f.pvBatt; f.gridBatt = b - f.pvBatt; }
+    if (b < 0) { f.battHome = Math.min(-b, ldLeft); ldLeft -= f.battHome; f.battGrid = -b - f.battHome; }
+    f.pvGrid = Math.max(0, pvLeft); f.gridHome = Math.max(0, ldLeft);
+    return f;
+  }
+  var parts = [];
+  var lastT = 0;
+  function sceneState() {
+    var i = Math.min(t, C.T - 1);
+    var h = day.hours[i];
+    var pv = day.pvA[i], ld = day.ldA[i];
+    var b = finished ? 0 : E.shield(s, previewB).b;
+    return { h: h, pv: pv, ld: ld, b: b, price: day.prA[i], pf: day.prF[i], soc: s };
+  }
+  function skyColors(h) {
+    if (h >= 7 && h < 17) return ['#0e3a6e', '#174f8f'];
+    if (h === 6 || h === 17) return ['#1b2f5c', '#7a4a4a'];
+    if (h === 18) return ['#14244a', '#4a2f4f'];
+    return ['#050d1f', '#0a1a36'];
+  }
+  function drawScene(ts) {
+    var dt = Math.min(0.05, (ts - lastT) / 1000 || 0); lastT = ts;
+    var st = sceneState(), f = flowsFor(st.pv, st.ld, st.b);
+    var sky = skyColors(st.h);
+    var g = cx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, sky[0]); g.addColorStop(1, sky[1]);
+    cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+    // control-room grid
+    cx.strokeStyle = 'rgba(147,171,203,0.07)'; cx.lineWidth = 1;
+    for (var x = 0; x < W; x += 30) { cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, H); cx.stroke(); }
+    for (var y = 0; y < H; y += 30) { cx.beginPath(); cx.moveTo(0, y); cx.lineTo(W, y); cx.stroke(); }
+    // ground
+    cx.fillStyle = '#0a1a30'; cx.fillRect(0, 300, W, 80);
+    cx.strokeStyle = '#1d3d68'; cx.beginPath(); cx.moveTo(0, 300); cx.lineTo(W, 300); cx.stroke();
+    // sun or moon
+    var night = st.pv < 0.02;
+    if (!night) {
+      var k = Math.min(1, st.pv / 2.8);
+      var rg = cx.createRadialGradient(95, 70, 4, 95, 70, 70);
+      rg.addColorStop(0, 'rgba(250,204,21,' + (0.55 + 0.4 * k) + ')'); rg.addColorStop(1, 'rgba(250,204,21,0)');
+      cx.fillStyle = rg; cx.beginPath(); cx.arc(95, 70, 70, 0, 7); cx.fill();
+      cx.fillStyle = '#facc15'; cx.beginPath(); cx.arc(95, 70, 16 + 10 * k, 0, 7); cx.fill();
+      if (st.pv < 0.55 * day.pvF[Math.min(t, C.T - 1)] && day.pvF[Math.min(t, C.T - 1)] > 0.3) { // cloud
+        cx.fillStyle = 'rgba(200,214,235,0.85)';
+        [[78, 82, 20], [100, 76, 24], [124, 84, 18]].forEach(function (c) { cx.beginPath(); cx.arc(c[0], c[1], c[2], 0, 7); cx.fill(); });
+      }
+    } else {
+      cx.fillStyle = '#dbe7ff'; cx.beginPath(); cx.arc(95, 66, 15, 0, 7); cx.fill();
+      cx.fillStyle = sky[0]; cx.beginPath(); cx.arc(103, 60, 14, 0, 7); cx.fill();
+      cx.fillStyle = 'rgba(233,242,255,0.8)';
+      [[180, 40], [250, 70], [420, 30], [520, 60], [660, 40], [300, 25]].forEach(function (p) { cx.fillRect(p[0], p[1], 2, 2); });
+    }
+    // faint path rails
+    Object.keys(PATHS).forEach(function (key) {
+      if (key === 'battGrid') return;
+      var p = PATHS[key];
+      cx.strokeStyle = 'rgba(147,171,203,0.16)'; cx.lineWidth = 2; cx.setLineDash([4, 6]);
+      cx.beginPath(); cx.moveTo(p[0][0], p[0][1]); cx.bezierCurveTo(p[1][0], p[1][1], p[2][0], p[2][1], p[3][0], p[3][1]); cx.stroke();
+      cx.setLineDash([]);
+    });
+    // active flows: glow line width by power
+    Object.keys(f).forEach(function (key) {
+      var P = f[key]; if (P < 0.03) return;
+      var p = PATHS[key];
+      cx.strokeStyle = COLORS[key]; cx.globalAlpha = 0.35; cx.lineWidth = 2 + 3 * Math.min(1, P / 2.5);
+      cx.beginPath(); cx.moveTo(p[0][0], p[0][1]); cx.bezierCurveTo(p[1][0], p[1][1], p[2][0], p[2][1], p[3][0], p[3][1]); cx.stroke();
+      cx.globalAlpha = 1;
+      if (!reduce && Math.random() < dt * 9 * P) parts.push({ key: key, u: 0, sp: 0.45 + 0.1 * Math.random() });
+      var mid = bez(p, 0.5);
+      cx.fillStyle = COLORS[key]; cx.font = '600 12px "IBM Plex Mono", monospace';
+      cx.fillText(P.toFixed(2) + ' kW', mid[0] + 6, mid[1] - 6);
+    });
+    // particles
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var q = parts[i]; q.u += q.sp * dt;
+      if (q.u >= 1 || f[q.key] < 0.03) { parts.splice(i, 1); continue; }
+      var pt = bez(PATHS[q.key], q.u);
+      cx.fillStyle = COLORS[q.key]; cx.shadowColor = COLORS[q.key]; cx.shadowBlur = 8;
+      cx.beginPath(); cx.arc(pt[0], pt[1], 3.2, 0, 7); cx.fill(); cx.shadowBlur = 0;
+    }
+    // house
+    cx.fillStyle = '#13305a'; cx.strokeStyle = '#3b6aa6'; cx.lineWidth = 2;
+    cx.beginPath(); cx.rect(290, 160, 140, 140); cx.fill(); cx.stroke();
+    cx.fillStyle = '#0f2850'; cx.beginPath(); cx.moveTo(272, 162); cx.lineTo(360, 104); cx.lineTo(448, 162); cx.closePath(); cx.fill(); cx.stroke();
+    // PV panel on the roof
+    cx.save(); cx.translate(300, 150); cx.rotate(-0.58);
+    cx.fillStyle = '#0b2a5e'; cx.fillRect(0, -14, 82, 18);
+    cx.strokeStyle = night ? '#2a4d80' : '#facc15'; cx.lineWidth = 1;
+    for (var gx = 0; gx <= 82; gx += 13.6) { cx.beginPath(); cx.moveTo(gx, -14); cx.lineTo(gx, 4); cx.stroke(); }
+    cx.beginPath(); cx.moveTo(0, -5); cx.lineTo(82, -5); cx.stroke();
+    cx.restore();
+    // windows glow with load
+    var glow = Math.min(1, st.ld / 2.2), lit = (st.h >= 17 || st.h < 7);
+    cx.fillStyle = lit ? 'rgba(250,224,140,' + (0.35 + 0.6 * glow) + ')' : 'rgba(147,171,203,0.25)';
+    cx.fillRect(310, 186, 34, 30); cx.fillRect(376, 186, 34, 30); cx.fillRect(346, 246, 28, 54);
+    cx.fillStyle = '#e9f2ff'; cx.font = '600 13px "IBM Plex Sans", sans-serif';
+    cx.fillText('Home ' + st.ld.toFixed(2) + ' kW', 312, 318);
+    // battery
+    var frac = (st.soc - 0) / C.smax;
+    cx.fillStyle = '#0a1a33'; cx.strokeStyle = '#22d3ee'; cx.lineWidth = 2;
+    cx.beginPath(); cx.rect(118, 198, 56, 98); cx.fill(); cx.stroke();
+    cx.fillStyle = '#22d3ee'; cx.fillRect(136, 191, 20, 7);
+    var fh = 92 * frac;
+    var bg = cx.createLinearGradient(0, 294, 0, 200); bg.addColorStop(0, '#2dd4bf'); bg.addColorStop(1, '#22d3ee');
+    cx.fillStyle = bg; cx.fillRect(121, 293 - fh, 50, fh);
+    cx.fillStyle = 'rgba(233,242,255,0.18)'; cx.fillRect(121, 293 - 92 * (C.smin / C.smax), 50, 1.5);
+    cx.fillStyle = '#e9f2ff'; cx.font = '600 13px "IBM Plex Mono", monospace';
+    cx.fillText(Math.round(100 * frac) + ' %', 128, 186);
+    cx.font = '500 12px "IBM Plex Sans", sans-serif'; cx.fillStyle = '#93abcb'; cx.fillText('Battery', 122, 314);
+    // grid pylon
+    cx.strokeStyle = '#93abcb'; cx.lineWidth = 2;
+    cx.beginPath(); cx.moveTo(592, 300); cx.lineTo(610, 130); cx.lineTo(628, 300); cx.moveTo(598, 240); cx.lineTo(622, 240); cx.moveTo(602, 196); cx.lineTo(618, 196);
+    cx.moveTo(588, 150); cx.lineTo(632, 150); cx.moveTo(594, 170); cx.lineTo(626, 170); cx.stroke();
+    var spike = st.price - st.pf >= 1.5, dip = st.pf - st.price >= 1.5;
+    cx.fillStyle = spike ? '#fb7185' : (dip ? '#4ade80' : '#0f2850'); cx.strokeStyle = spike ? '#fb7185' : '#3b6aa6';
+    cx.beginPath(); cx.rect(560, 88, 104, 30); cx.fill(); cx.stroke();
+    cx.fillStyle = spike || dip ? '#061326' : '#e9f2ff'; cx.font = '600 15px "IBM Plex Mono", monospace';
+    cx.fillText('₹' + st.price.toFixed(1) + '/kWh', 568, 108);
+    cx.font = '500 12px "IBM Plex Sans", sans-serif'; cx.fillStyle = '#93abcb'; cx.fillText('Grid', 596, 314);
+    // PV label
+    cx.fillStyle = '#facc15'; cx.font = '600 13px "IBM Plex Mono", monospace';
+    cx.fillText('Solar ' + st.pv.toFixed(2) + ' kW', 236, 96);
+    // clock
+    cx.fillStyle = 'rgba(233,242,255,0.9)'; cx.font = '700 30px "Barlow Condensed", sans-serif';
+    cx.fillText(finished ? '06:00' : hh(st.h), 640, 40);
+    requestAnimationFrame(drawScene);
+  }
+
+  // ---------- charts ----------
+  function setupCanvas(c) {
+    var r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
+    c.width = Math.max(10, r.width * d); c.height = Math.max(10, r.height * d);
+    var g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+    return { g: g, w: r.width, h: r.height };
+  }
+  function axes(g, w, h, ymax, step, unit) {
+    var L = 34, R = 8, T = 8, B = 20;
+    g.strokeStyle = 'rgba(147,171,203,0.15)'; g.fillStyle = '#93abcb'; g.font = '11px "IBM Plex Mono", monospace'; g.lineWidth = 1;
+    for (var v = 0; v <= ymax + 1e-9; v += step) {
+      var y = T + (h - T - B) * (1 - v / ymax);
+      g.beginPath(); g.moveTo(L, y); g.lineTo(w - R, y); g.stroke();
+      g.fillText(String(v), 4, y + 4);
+    }
+    for (var i = 0; i <= 24; i += 6) {
+      var x = L + (w - L - R) * i / 24, hrs = (C.start + i) % 24;
+      g.fillText(hh(hrs), Math.min(w - 40, x - 14), h - 4);
+    }
+    return { X: function (i) { return L + (w - L - R) * i / 24; }, Y: function (v) { return T + (h - T - B) * (1 - v / ymax); }, L: L, R: R, T: T, B: B };
+  }
+  function drawCharts() {
+    if (!day) return;
+    var a = setupCanvas($('cPrice')), g = a.g;
+    g.clearRect(0, 0, a.w, a.h);
+    var ymax = Math.ceil(Math.max(12, Math.max.apply(null, day.prA) + 1) / 2) * 2;
+    var ax = axes(g, a.w, a.h, ymax, 4);
+    // current hour band
+    if (t < C.T) { g.fillStyle = 'rgba(34,211,238,0.10)'; g.fillRect(ax.X(t), ax.T, ax.X(t + 1) - ax.X(t), a.h - ax.T - ax.B); }
+    // forecast steps
+    g.strokeStyle = '#93abcb'; g.setLineDash([4, 4]); g.lineWidth = 1.5; g.beginPath();
+    for (var i = 0; i < 24; i++) { var y = ax.Y(day.prF[i]); if (i === 0) g.moveTo(ax.X(i), y); else g.lineTo(ax.X(i), y); g.lineTo(ax.X(i + 1), y); }
+    g.stroke(); g.setLineDash([]);
+    // actual (revealed)
+    var shown = finished ? 24 : Math.min(24, t + 1);
+    g.strokeStyle = '#f59e0b'; g.lineWidth = 2.2; g.beginPath();
+    for (i = 0; i < shown; i++) { y = ax.Y(day.prA[i]); if (i === 0) g.moveTo(ax.X(i), y); else g.lineTo(ax.X(i), y); g.lineTo(ax.X(i + 1), y); }
+    g.stroke();
+    for (i = 0; i < shown; i++) if (Math.abs(day.prA[i] - day.prF[i]) >= 1.5) {
+      g.fillStyle = day.prA[i] > day.prF[i] ? '#fb7185' : '#4ade80';
+      g.beginPath(); g.arc((ax.X(i) + ax.X(i + 1)) / 2, ax.Y(day.prA[i]) - 7, 4, 0, 7); g.fill();
+    }
+    // SoC chart
+    var b2 = setupCanvas($('cSoc')), g2 = b2.g;
+    g2.clearRect(0, 0, b2.w, b2.h);
+    var ax2 = axes(g2, b2.w, b2.h, 6, 2);
+    // solar bars in background
+    for (i = 0; i < 24; i++) {
+      var pvv = day.pvA[i]; if (i >= shown && !finished) pvv = day.pvF[i];
+      g2.fillStyle = i < shown ? 'rgba(250,204,21,0.20)' : 'rgba(250,204,21,0.08)';
+      var y0 = ax2.Y(Math.min(6, pvv)); g2.fillRect(ax2.X(i) + 1, y0, ax2.X(i + 1) - ax2.X(i) - 2, ax2.Y(0) - y0);
+    }
+    g2.fillStyle = 'rgba(233,242,255,0.10)'; g2.fillRect(ax2.L, ax2.Y(C.smin), b2.w - ax2.L - ax2.R, 1);
+    function line(pts, col, wdt, dash, alpha) {
+      g2.strokeStyle = col; g2.lineWidth = wdt; g2.globalAlpha = alpha || 1; g2.setLineDash(dash || []); g2.beginPath();
+      pts.forEach(function (p, j) { var X = ax2.X(p[0]), Y = ax2.Y(p[1]); if (j === 0) g2.moveTo(X, Y); else g2.lineTo(X, Y); });
+      g2.stroke(); g2.setLineDash([]); g2.globalAlpha = 1;
+    }
+    if (finished) {
+      ref.ai.res.plans.forEach(function (pl, k) {
+        line(pl.map(function (v, j) { return [k + j, v]; }), '#2dd4bf', 1, null, 0.18);
+      });
+      line(ref.oracle.res.trace.map(function (st) { return [st.t, st.s]; }).concat([[24, ref.oracle.res.sEnd]]), '#e9f2ff', 2, [5, 4]);
+      line(ref.ai.res.trace.map(function (st) { return [st.t, st.s]; }).concat([[24, ref.ai.res.sEnd]]), '#2dd4bf', 2.2);
+    }
+    var mineP = trace.map(function (st) { return [st.t, st.s]; }); mineP.push([trace.length, s]);
+    line(mineP, '#22d3ee', 3);
+  }
+
+  // ---------- events ----------
+  for (var i = 0; i < 5; i++) (function (btn) {
+    btn.addEventListener('click', function () { if (mode === 'ai') return; previewB = 0; applyAction(parseFloat(btn.dataset.b), 'you'); });
+    btn.addEventListener('mouseenter', function () { previewB = parseFloat(btn.dataset.b); });
+    btn.addEventListener('mouseleave', function () { previewB = 0; });
+    btn.addEventListener('focus', function () { previewB = parseFloat(btn.dataset.b); });
+    btn.addEventListener('blur', function () { previewB = 0; });
+  })($('a' + i));
+  $('btnWatch').addEventListener('click', watchAI);
+  $('btnRestart').addEventListener('click', restart);
+  $('btnAgain').addEventListener('click', restart);
+  function rnd() { return 1000 + Math.floor(Math.random() * 9000); }
+  $('btnNew').addEventListener('click', function () { newDay(rnd()); });
+  $('btnNew2').addEventListener('click', function () { newDay(rnd()); });
+  $('code').addEventListener('change', function () { var v = parseInt($('code').value, 10); if (v > 0) newDay(v); });
+  $('btnCopy').addEventListener('click', function () {
+    var txt = $('copyNote').textContent;
+    try {
+      navigator.clipboard.writeText(txt).then(function () { $('btnCopy').textContent = 'Copied'; }, function () { $('btnCopy').textContent = 'Copy blocked: type it in the chat'; });
+    } catch (e) { $('btnCopy').textContent = 'Copy blocked: type it in the chat'; }
+  });
+  window.addEventListener('resize', function () { fitScene(); drawCharts(); });
+
+  fitScene();
+  newDay(1132);
+  requestAnimationFrame(drawScene);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qubits Pick the Chargers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Quantum lab bench on the grid console: navy base, violet for circuit blocks, cyan for amplitudes, green for the best answer. */
+  --bg: #061326;
+  --panel: #0b1f3a;
+  --panel-2: #0f2850;
+  --line: #1d3d68;
+  --ink: #e9f2ff;
+  --muted: #93abcb;
+  --accent: #22d3ee;
+  --violet: #a78bfa;
+  --good: #4ade80;
+  --bad: #fb7185;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* Layout: problem beside circuit, then controls, then outcomes beside the landscape. */
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+header { display: grid; gap: 4px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1; margin: 0; text-wrap: balance; }
+.tag { color: var(--muted); margin: 2px 0 0; font-size: 15px; max-width: 75ch; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.card h2 { margin: 0 0 8px; font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 14px; }
+.evs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ev { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 4px; }
+.ev b { font-family: var(--font-display); font-size: 26px; }
+.ev span { font-size: 12px; color: var(--muted); }
+.ev .u { height: 6px; background: #0a1a33; border-radius: 99px; overflow: hidden; }
+.ev .u i { display: block; height: 100%; background: var(--accent); }
+.ev.on { border-color: var(--good); box-shadow: 0 0 0 1px var(--good) inset; }
+.rules { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.eq { font-family: var(--font-mono); color: var(--ink); background: #0a1a33; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: block; margin: 8px 0; font-size: 13px; overflow-x: auto; white-space: nowrap; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.compare div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; color: var(--muted); }
+.compare b { color: var(--ink); display: block; font-size: 15px; }
+#circ { width: 100%; overflow-x: auto; }
+#circ svg { display: block; min-width: 520px; width: 100%; height: auto; }
+.ctrl { display: grid; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.seg button { font: 600 14px var(--font-body); color: var(--muted); background: var(--panel-2); border: 0; padding: 10px 14px; cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #032031; }
+.btn { font: 600 14px var(--font-body); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: #032031; border-color: var(--accent); }
+.btn:focus-visible, .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 16px; }
+.sl { display: grid; grid-template-columns: auto minmax(0, 1fr) 64px; gap: 8px; align-items: center; font-family: var(--font-mono); font-size: 13px; }
+.sl input { width: 100%; accent-color: var(--violet); }
+.sl output { text-align: right; font-variant-numeric: tabular-nums; }
+.lbl { color: var(--muted); font-size: 13px; }
+.results { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.tile { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 2px; }
+.tile .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.tile .v { font-family: var(--font-display); font-size: 38px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12px; color: var(--muted); }
+.tile.best .v { color: var(--good); }
+.bars { display: grid; gap: 4px; }
+.bar { display: grid; grid-template-columns: 116px 36px minmax(0, 1fr) 54px; gap: 8px; align-items: center; font-size: 13px; }
+.bar .nm { font-family: var(--font-mono); }
+.bar .c { font-family: var(--font-mono); color: var(--muted); text-align: right; }
+.bar .track { position: relative; height: 16px; background: #0a1a33; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.bar .track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
+.bar .track em { position: absolute; top: -1px; bottom: -1px; width: 3px; background: #e9f2ff; }
+.bar.best .track i { background: var(--good); }
+.bar.inf .track i { background: #5b6b86; }
+.bar .p { font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.bar.best .nm { color: var(--good); font-weight: 600; }
+.bar.inf .nm { color: var(--muted); }
+#heat { width: 100%; aspect-ratio: 2 / 1.15; display: block; cursor: crosshair; border-radius: 10px; }
+.note { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.note p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+details summary { cursor: pointer; font-weight: 600; }
+details .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 4px 0 10px; }
+@media (max-width: 900px) { .grid2, .results, .note, details .cols { grid-template-columns: 1fr; } .sliders { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .evs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tile .v { font-size: 30px; } .bar { grid-template-columns: 78px 36px minmax(0, 1fr) 48px; font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Episode 7 · Parameterized quantum circuits</span>
+    <h1>Qubits Pick the Chargers</h1>
+    <p class="tag">Four EVs wait. The feeder can serve two right now. One qubit per EV. The circuit holds all 16 choices at once; a classical optimizer tunes its angles until the best choice is the most likely result.</p>
+  </header>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>The decision</h2>
+      <div class="evs" id="evs"></div>
+      <ul class="rules">
+        <li>Exactly <b>2</b> EVs are served now. Each served EV earns its urgency score.</li>
+        <li>A and B share phase L1. If both are served, the phase imbalance costs 3.</li>
+      </ul>
+      <span class="eq" style="white-space:normal">C(x) = −(5x_A + 4x_B + 3x_C + 1x_D) + 4(Σx − 2)² + 3·x_A·x_B</span>
+      <div class="compare">
+        <div><b>Greedy: A + B</b>top two urgency scores · cost −6</div>
+        <div><b>Best: A + C</b>found by a full search of 16 · cost −8</div>
+      </div>
+      <p class="lbl" style="margin:10px 0 0;line-height:1.5">One qubit per EV: 4 qubits hold 2⁴ = 16 choices. A feeder with 50 EVs would need 50 qubits for 2⁵⁰ ≈ 1.1 × 10¹⁵ choices. That growth is the reason to study quantum methods for coordination.</p>
+    </div>
+    <div class="card">
+      <h2 id="circTitle">The circuit</h2>
+      <div id="circ" aria-label="QAOA circuit diagram"></div>
+      <p class="lbl" id="circNote"></p>
+    </div>
+  </div>
+
+  <div class="card ctrl">
+    <div class="row">
+      <span class="lbl">Mixer</span>
+      <div class="seg" role="group" aria-label="Mixer">
+        <button data-mx="X" aria-pressed="true">X mixer (constraint as penalty)</button>
+        <button data-mx="XY" aria-pressed="false">XY mixer (constraint built in)</button>
+      </div>
+      <span class="lbl">Layers p</span>
+      <div class="seg" role="group" aria-label="Number of layers">
+        <button data-p="1" aria-pressed="true">1</button>
+        <button data-p="2" aria-pressed="false">2</button>
+        <button data-p="3" aria-pressed="false">3</button>
+      </div>
+    </div>
+    <div class="sliders" id="sliders"></div>
+    <div class="row">
+      <button class="btn primary" id="opt">Optimize angles</button>
+      <button class="btn" id="bestBtn">Best known angles</button>
+      <button class="btn" id="reset">Reset angles</button>
+      <button class="btn" id="shotBtn">Measure 1000 shots</button>
+      <label class="lbl" for="eps">Readout error</label>
+      <input type="range" id="eps" min="0" max="0.1" step="0.005" value="0.02" style="accent-color:#fb7185">
+      <output id="epsOut" class="lbl" for="eps">2.0 %</output>
+    </div>
+  </div>
+
+  <div class="results">
+    <div class="card">
+      <div class="tiles">
+        <div class="tile best"><span class="k">P(best answer)</span><span class="v" id="pBest">0%</span><span class="s">A + C</span></div>
+        <div class="tile"><span class="k">Expected cost ⟨C⟩</span><span class="v" id="eC">0</span><span class="s">optimum −8</span></div>
+        <div class="tile"><span class="k">Random guess</span><span class="v" id="rnd">6%</span><span class="s" id="rndS">1 in 16</span></div>
+      </div>
+      <div class="bars" id="bars" aria-label="Probability of each of the 16 outcomes"></div>
+      <p class="lbl" id="shotNote">Bars: exact probabilities. White ticks: share of 1000 simulated shots.</p>
+    </div>
+    <div class="card">
+      <h2>Energy landscape ⟨C⟩(γ, β) for p = 1</h2>
+      <canvas id="heat" aria-label="Expected cost over gamma and beta"></canvas>
+      <p class="lbl" id="heatNote">Horizontal axis γ₁, vertical axis β₁. Dark is low cost. Click the map to set both angles. The white path shows the optimizer.</p>
+    </div>
+  </div>
+
+  <div class="card note">
+    <p><b style="color:var(--ink)">An honest note.</b> Sixteen choices take a laptop less than a microsecond to check. QAOA is studied for very large decisions, where a full search is impossible. Whether it beats the best classical methods at that scale is still an open research question.</p>
+    <p><b style="color:var(--ink)">The same loop trains a quantum critic.</b> A circuit with angles θ gives a measured output; a classical optimizer tunes θ. In QS-MARL the output is a value estimate for the joint state of the microgrid agents, with one qubit per agent.</p>
+  </div>
+
+  <details class="card">
+    <summary>Equations, checks and references</summary>
+    <div class="cols">
+      <div>
+        <span class="eq">|ψ(γ, β)⟩ = Π_l e^(−iβ_l H_M) e^(−iγ_l C/4) |ψ₀⟩</span>
+        <p><b>X mixer.</b> H_M = Σ X_i and |ψ₀⟩ = |+⟩⊗4, so all 16 choices start equal. The constraint "exactly 2" lives only in the penalty term of C.</p>
+        <p><b>XY mixer.</b> H_M = Σ_ring (X_iX_j + Y_iY_j)/2 and |ψ₀⟩ is the Dicke state of the six choices with two EVs. This mixer moves weight only between valid choices, so the constraint holds by design.</p>
+        <span class="eq">objective: min over (γ, β) of ⟨ψ|C|ψ⟩</span>
+      </div>
+      <div>
+        <p><b>Checks.</b> The browser statevector simulator matches a SciPy matrix exponential reference to 1.3e-14 for both mixers at p = 1, 2 and 3. Best known angles come from a multistart L-BFGS-B search inside the slider ranges.</p>
+        <p><b>Readout error.</b> Each measured bit flips with the chosen probability. The bars stay exact; the white ticks show what a noisy device would report.</p>
+        <p><b>References.</b> Farhi, Goldstone and Gutmann (2014), arXiv:1411.4028. Hadfield et al. (2019), Algorithms 12(2):34. Lucas (2014), Frontiers in Physics 2:5.</p>
+      </div>
+    </div>
+  </details>
+  <footer>ITSR FDP 2026 · Session 04 · Dr. Lilia Tightiz, Sejong University · Exact simulation, no quantum hardware</footer>
+</div>
+
+<script>// QAOA engine: exact 4-qubit statevector simulation with an X mixer or a ring XY mixer.
+// Qubit order: index bit 3 = EV A (most significant), bit 0 = EV D. Bit 1 = EV served.
+var QAOAEngine = (function () {
+  'use strict';
+  var NQ = 4, N = 16, NAMES = ['A', 'B', 'C', 'D'];
+  var PROBLEM = { w: [5, 4, 3, 1], lam: 4, pAB: 3, k: 2, scale: 4 };
+
+  function bit(z, i) { return (z >> (NQ - 1 - i)) & 1; }
+  function weight(z) { var s = 0; for (var i = 0; i < NQ; i++) s += bit(z, i); return s; }
+  function label(z) { var s = []; for (var i = 0; i < NQ; i++) if (bit(z, i)) s.push(NAMES[i]); return s.length ? s.join(' + ') : 'none'; }
+  function bitstr(z) { var s = ''; for (var i = 0; i < NQ; i++) s += bit(z, i); return s; }
+  function cost(z) {
+    var P = PROBLEM, c = 0, k = weight(z);
+    for (var i = 0; i < NQ; i++) c -= P.w[i] * bit(z, i);
+    c += P.lam * (k - P.k) * (k - P.k);
+    c += P.pAB * bit(z, 0) * bit(z, 1);
+    return c;
+  }
+  var C = new Float64Array(N);
+  for (var z0 = 0; z0 < N; z0++) C[z0] = cost(z0);
+  var BEST = 0; for (var z1 = 1; z1 < N; z1++) if (C[z1] < C[BEST]) BEST = z1;
+
+  // Ring XY Hamiltonian: sum over ring edges of (XX + YY)/2 = |01><10| + |10><01|. Real symmetric.
+  var RING = [[0, 1], [1, 2], [2, 3], [3, 0]];
+  function buildHXY() {
+    var H = []; for (var a = 0; a < N; a++) { H.push(new Float64Array(N)); }
+    for (var z = 0; z < N; z++) RING.forEach(function (e) {
+      var bi = bit(z, e[0]), bj = bit(z, e[1]);
+      if (bi !== bj) {
+        var z2 = z ^ (1 << (NQ - 1 - e[0])) ^ (1 << (NQ - 1 - e[1]));
+        H[z2][z] += 1;
+      }
+    });
+    return H;
+  }
+  // Cyclic Jacobi eigen-decomposition for a real symmetric matrix
+  function jacobi(A0) {
+    var n = A0.length, A = A0.map(function (r) { return Float64Array.from(r); }), V = [], i, j;
+    for (i = 0; i < n; i++) { V.push(new Float64Array(n)); V[i][i] = 1; }
+    for (var sweep = 0; sweep < 100; sweep++) {
+      var off = 0;
+      for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) off += A[i][j] * A[i][j];
+      if (off < 1e-26) break;
+      for (var p = 0; p < n; p++) for (var q = p + 1; q < n; q++) {
+        if (Math.abs(A[p][q]) < 1e-300) continue;
+        var th = (A[q][q] - A[p][p]) / (2 * A[p][q]);
+        var t = (th >= 0 ? 1 : -1) / (Math.abs(th) + Math.sqrt(th * th + 1));
+        var c = 1 / Math.sqrt(t * t + 1), s = t * c;
+        for (var k = 0; k < n; k++) {
+          var akp = A[k][p], akq = A[k][q];
+          A[k][p] = c * akp - s * akq; A[k][q] = s * akp + c * akq;
+        }
+        for (k = 0; k < n; k++) {
+          var apk = A[p][k], aqk = A[q][k];
+          A[p][k] = c * apk - s * aqk; A[q][k] = s * apk + c * aqk;
+        }
+        for (k = 0; k < n; k++) {
+          var vkp = V[k][p], vkq = V[k][q];
+          V[k][p] = c * vkp - s * vkq; V[k][q] = s * vkp + c * vkq;
+        }
+      }
+    }
+    var vals = new Float64Array(n); for (i = 0; i < n; i++) vals[i] = A[i][i];
+    return { vals: vals, vecs: V };
+  }
+  var XY = jacobi(buildHXY());
+
+  function initial(mixer) {
+    var re = new Float64Array(N), im = new Float64Array(N), z;
+    if (mixer === 'X') { for (z = 0; z < N; z++) re[z] = 0.25; }
+    else { var f = 1 / Math.sqrt(6); for (z = 0; z < N; z++) if (weight(z) === 2) re[z] = f; } // Dicke state D(4,2)
+    return { re: re, im: im };
+  }
+  function applyCost(st, g) {
+    var S = PROBLEM.scale;
+    for (var z = 0; z < N; z++) {
+      var a = -g * C[z] / S, c = Math.cos(a), s = Math.sin(a), r = st.re[z], m = st.im[z];
+      st.re[z] = r * c - m * s; st.im[z] = r * s + m * c;
+    }
+  }
+  function applyX(st, b) { // exp(-i b sum X_i) = product of RX(2b)
+    var c = Math.cos(b), s = Math.sin(b);
+    for (var q = 0; q < NQ; q++) {
+      var mask = 1 << (NQ - 1 - q);
+      for (var z = 0; z < N; z++) if (!(z & mask)) {
+        var z2 = z | mask, ar = st.re[z], ai = st.im[z], br = st.re[z2], bi = st.im[z2];
+        st.re[z] = c * ar + s * bi; st.im[z] = c * ai - s * br;     // c a - i s b
+        st.re[z2] = c * br + s * ai; st.im[z2] = c * bi - s * ar;   // -i s a + c b
+      }
+    }
+  }
+  function applyXY(st, b) { // exp(-i b H_XY) = V diag(exp(-i b lambda)) V^T
+    var V = XY.vecs, L = XY.vals, yr = new Float64Array(N), yi = new Float64Array(N), k, z;
+    for (k = 0; k < N; k++) { var sr = 0, si = 0; for (z = 0; z < N; z++) { sr += V[z][k] * st.re[z]; si += V[z][k] * st.im[z]; } yr[k] = sr; yi[k] = si; }
+    for (k = 0; k < N; k++) { var a = -b * L[k], c = Math.cos(a), s = Math.sin(a), r = yr[k], m = yi[k]; yr[k] = r * c - m * s; yi[k] = r * s + m * c; }
+    for (z = 0; z < N; z++) { var tr = 0, ti = 0; for (k = 0; k < N; k++) { tr += V[z][k] * yr[k]; ti += V[z][k] * yi[k]; } st.re[z] = tr; st.im[z] = ti; }
+  }
+  // params = [g1..gp, b1..bp]
+  function simulate(params, mixer) {
+    var p = params.length / 2, st = initial(mixer);
+    for (var l = 0; l < p; l++) {
+      applyCost(st, params[l]);
+      if (mixer === 'X') applyX(st, params[p + l]); else applyXY(st, params[p + l]);
+    }
+    var probs = new Float64Array(N), E = 0, tot = 0;
+    for (var z = 0; z < N; z++) { probs[z] = st.re[z] * st.re[z] + st.im[z] * st.im[z]; E += probs[z] * C[z]; tot += probs[z]; }
+    return { re: st.re, im: st.im, probs: probs, E: E, pBest: probs[BEST], norm: tot };
+  }
+  function expectation(params, mixer) { return simulate(params, mixer).E; }
+
+  // Nelder-Mead minimizer (returns the path of best points for animation)
+  function nelderMead(f, x0, opt) {
+    opt = opt || {}; var n = x0.length, maxIt = opt.maxIt || 400, tol = opt.tol || 1e-9, step = opt.step || 0.25;
+    var pts = [Float64Array.from(x0)];
+    for (var i = 0; i < n; i++) { var p = Float64Array.from(x0); p[i] += step; pts.push(p); }
+    var fv = pts.map(f), path = [Array.from(x0)];
+    for (var it = 0; it < maxIt; it++) {
+      var idx = fv.map(function (v, k) { return k; }).sort(function (a, b) { return fv[a] - fv[b]; });
+      pts = idx.map(function (k) { return pts[k]; }); fv = idx.map(function (k) { return fv[k]; });
+      path.push(Array.from(pts[0]));
+      if (Math.abs(fv[n] - fv[0]) < tol) break;
+      var cen = new Float64Array(n);
+      for (i = 0; i < n; i++) for (var j = 0; j < n; j++) cen[j] += pts[i][j] / n;
+      function lin(a, b, t) { var r = new Float64Array(n); for (var j2 = 0; j2 < n; j2++) r[j2] = a[j2] + t * (b[j2] - a[j2]); return r; }
+      var xr = lin(cen, pts[n], -1), fr = f(xr);
+      if (fr < fv[0]) {
+        var xe = lin(cen, pts[n], -2), fe = f(xe);
+        if (fe < fr) { pts[n] = xe; fv[n] = fe; } else { pts[n] = xr; fv[n] = fr; }
+      } else if (fr < fv[n - 1]) { pts[n] = xr; fv[n] = fr; }
+      else {
+        var xc = lin(cen, pts[n], 0.5), fc = f(xc);
+        if (fc < fv[n]) { pts[n] = xc; fv[n] = fc; }
+        else { for (i = 1; i <= n; i++) { pts[i] = lin(pts[0], pts[i], 0.5); fv[i] = f(pts[i]); } }
+      }
+    }
+    var b0 = 0; for (i = 1; i <= n; i++) if (fv[i] < fv[b0]) b0 = i;
+    return { x: Array.from(pts[b0]), fx: fv[b0], path: path, iters: it };
+  }
+
+  function mulberry32(a) { return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; var t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  // Sample measurement outcomes; each bit flips with readout error eps
+  function shots(probs, n, eps, seed) {
+    var r = mulberry32(seed || 12345), cdf = [], acc = 0, z, counts = new Int32Array(N);
+    for (z = 0; z < N; z++) { acc += probs[z]; cdf.push(acc); }
+    for (var s = 0; s < n; s++) {
+      var u = r() * acc, k = 0; while (k < N - 1 && u > cdf[k]) k++;
+      for (var q = 0; q < NQ; q++) if (r() < eps) k ^= (1 << (NQ - 1 - q));
+      counts[k]++;
+    }
+    return counts;
+  }
+
+  return { N: N, NAMES: NAMES, PROBLEM: PROBLEM, C: C, BEST: BEST, bit: bit, weight: weight, label: label, bitstr: bitstr,
+           simulate: simulate, expectation: expectation, nelderMead: nelderMead, shots: shots, XY: XY };
+})();
+if (typeof module !== 'undefined') module.exports = QAOAEngine;
+</script>
+<script>
+(function () {
+  'use strict';
+  var Q = QAOAEngine, $ = function (id) { return document.getElementById(id); };
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var BESTA = {"X1": {"x": [0.43355, 2.83905]}, "X2": {"x": [1.88909, 2.05404, 0.64267, 2.40181]}, "X3": {"x": [6.26911, 6.27099, 6.28319, 3.0915, 2.35131, 2.36541]}, "XY1": {"x": [1.9981, 1.72689]}, "XY2": {"x": [1.93851, 3.38673, 1.60821, 1.89349]}, "XY3": {"x": [3.55631, 4.39225, 5.96867, 0.66981, 1.01751, 0.36535]}};
+  var mixer = 'X', p = 1, th = [0.8, 0.6], path = [], shotCounts = null, optTimer = null, heatCache = {};
+  var DEFAULT = { 1: [0.8, 0.6], 2: [0.8, 1.2, 0.6, 0.4], 3: [0.8, 1.2, 1.6, 0.6, 0.4, 0.2] };
+  var W = [5, 4, 3, 1], PH = ['L1', 'L1', 'L2', 'L3'];
+
+  // EV cards
+  $('evs').innerHTML = Q.NAMES.map(function (n, i) {
+    return '<div class="ev" id="ev' + i + '"><b>EV ' + n + '</b><span>urgency ' + W[i] + ' · phase ' + PH[i] + '</span><div class="u"><i style="width:' + (W[i] * 20) + '%"></i></div></div>';
+  }).join('');
+
+  function sliderHTML() {
+    var h = '';
+    for (var l = 0; l < p; l++) {
+      h += '<label class="sl" for="g' + l + '">γ' + (l + 1) + '<input type="range" id="g' + l + '" min="0" max="6.2832" step="0.001"><output id="go' + l + '"></output></label>';
+      h += '<label class="sl" for="b' + l + '">β' + (l + 1) + '<input type="range" id="b' + l + '" min="0" max="3.1416" step="0.001"><output id="bo' + l + '"></output></label>';
+    }
+    $('sliders').innerHTML = h;
+    for (l = 0; l < p; l++) (function (l) {
+      $('g' + l).addEventListener('input', function () { stopOpt(); th[l] = parseFloat(this.value); path = []; shotCounts = null; update(); });
+      $('b' + l).addEventListener('input', function () { stopOpt(); th[p + l] = parseFloat(this.value); path = []; shotCounts = null; update(); });
+    })(l);
+  }
+  function syncSliders() {
+    for (var l = 0; l < p; l++) {
+      $('g' + l).value = wrapG(th[l]); $('go' + l).textContent = th[l].toFixed(3);
+      $('b' + l).value = wrapB(th[p + l]); $('bo' + l).textContent = th[p + l].toFixed(3);
+    }
+  }
+  function wrapG(v) { var P2 = 2 * Math.PI; return Math.min(P2, Math.max(0, v)); }
+  function wrapB(v) { return Math.min(Math.PI, Math.max(0, v)); }
+
+  // Circuit diagram
+  function drawCircuit() {
+    var lw = 132, x0 = 128, w = x0 + p * lw + 70, h = 200, ys = [40, 80, 120, 160], s = '';
+    s += '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">';
+    ys.forEach(function (y, i) {
+      s += '<line x1="40" y1="' + y + '" x2="' + (w - 40) + '" y2="' + y + '" stroke="#3b6aa6" stroke-width="1.5"/>';
+      s += '<text x="6" y="' + (y + 4) + '" fill="#e9f2ff" font-size="13">' + Q.NAMES[i] + ' |0⟩</text>';
+    });
+    if (mixer === 'X') ys.forEach(function (y) { s += '<rect x="56" y="' + (y - 13) + '" width="26" height="26" rx="5" fill="#0f2850" stroke="#22d3ee"/><text x="64" y="' + (y + 5) + '" fill="#22d3ee" font-size="14">H</text>'; });
+    else s += '<rect x="50" y="24" width="56" height="152" rx="8" fill="#0f2850" stroke="#22d3ee"/><text x="57" y="96" fill="#22d3ee" font-size="12">Dicke</text><text x="57" y="112" fill="#22d3ee" font-size="12">D(4,2)</text>';
+    for (var l = 0; l < p; l++) {
+      var xc = x0 + l * lw;
+      s += '<rect x="' + xc + '" y="22" width="56" height="156" rx="8" fill="rgba(167,139,250,0.16)" stroke="#a78bfa"/>';
+      s += '<text x="' + (xc + 8) + '" y="92" fill="#e9f2ff" font-size="12">cost</text><text x="' + (xc + 8) + '" y="108" fill="#a78bfa" font-size="12">γ=' + th[l].toFixed(2) + '</text>';
+      var xm = xc + 64;
+      if (mixer === 'X') ys.forEach(function (y) { s += '<rect x="' + xm + '" y="' + (y - 13) + '" width="56" height="26" rx="5" fill="#0f2850" stroke="#2dd4bf"/><text x="' + (xm + 5) + '" y="' + (y + 4) + '" fill="#2dd4bf" font-size="10">RX 2β</text>'; });
+      else s += '<rect x="' + xm + '" y="22" width="56" height="156" rx="8" fill="rgba(45,212,191,0.14)" stroke="#2dd4bf"/><text x="' + (xm + 8) + '" y="92" fill="#e9f2ff" font-size="12">XY</text><text x="' + (xm + 8) + '" y="108" fill="#2dd4bf" font-size="11">ring</text>';
+      s += '<text x="' + (xm + 4) + '" y="196" fill="#2dd4bf" font-size="11">β=' + th[p + l].toFixed(2) + '</text>';
+    }
+    var xe = x0 + p * lw + 4;
+    ys.forEach(function (y) {
+      s += '<rect x="' + xe + '" y="' + (y - 13) + '" width="30" height="26" rx="5" fill="#0f2850" stroke="#93abcb"/>';
+      s += '<path d="M' + (xe + 6) + ' ' + (y + 6) + ' Q' + (xe + 15) + ' ' + (y - 8) + ' ' + (xe + 24) + ' ' + (y + 6) + '" fill="none" stroke="#93abcb"/><line x1="' + (xe + 15) + '" y1="' + (y + 6) + '" x2="' + (xe + 22) + '" y2="' + (y - 6) + '" stroke="#93abcb"/>';
+    });
+    s += '</svg>';
+    $('circ').innerHTML = s;
+    $('circTitle').textContent = 'The circuit: 4 qubits, p = ' + p + (mixer === 'X' ? ', X mixer' : ', XY mixer');
+    $('circNote').textContent = mixer === 'X' ? 'Start: all 16 choices equal. Cost layer: a phase from C(x). Mixer: one RX rotation per qubit.' :
+      'Start: the six valid choices only. Cost layer: a phase from C(x). Mixer: swaps between neighbour qubits, so every result keeps exactly two EVs.';
+  }
+
+  var order = []; for (var z = 0; z < 16; z++) order.push(z);
+  order.sort(function (a, b) { return Q.C[a] - Q.C[b] || a - b; });
+
+  function update() {
+    var r = Q.simulate(th, mixer);
+    $('pBest').textContent = (100 * r.pBest).toFixed(1) + '%';
+    $('eC').textContent = r.E.toFixed(2);
+    $('rnd').textContent = mixer === 'X' ? '6.3%' : '16.7%';
+    $('rndS').textContent = mixer === 'X' ? '1 in 16' : '1 in 6 valid';
+    var mx = Math.max.apply(null, Array.prototype.slice.call(r.probs));
+    var shotTot = shotCounts ? shotCounts.reduce(function (a, b) { return a + b; }, 0) : 0;
+    $('bars').innerHTML = order.map(function (z) {
+      var inf = Q.weight(z) !== 2, best = z === Q.BEST, pz = r.probs[z];
+      var tick = shotCounts ? '<em style="left:calc(' + (100 * shotCounts[z] / shotTot / Math.max(mx, 1e-9) * 0.98).toFixed(2) + '% - 1px)"></em>' : '';
+      return '<div class="bar' + (best ? ' best' : '') + (inf ? ' inf' : '') + '"><span class="nm">' + Q.label(z) + '</span><span class="c">' + Q.C[z] + '</span>' +
+        '<span class="track"><i style="width:' + (100 * pz / Math.max(mx, 1e-9) * 0.98).toFixed(2) + '%"></i>' + tick + '</span><span class="p">' + (100 * pz).toFixed(1) + '%</span></div>';
+    }).join('');
+    // highlight EVs of the most likely answer
+    var top = 0; for (var k = 1; k < 16; k++) if (r.probs[k] > r.probs[top]) top = k;
+    for (var i = 0; i < 4; i++) $('ev' + i).classList.toggle('on', Q.bit(top, i) === 1);
+    syncSliders(); drawCircuit(); drawHeat();
+    if (shotCounts) $('shotNote').textContent = 'White ticks: 1000 shots with ' + (100 * parseFloat($('eps').value)).toFixed(1) + ' % readout error. Best answer seen ' + shotCounts[Q.BEST] + ' times.';
+    else $('shotNote').textContent = 'Bars: exact probabilities. Press Measure to add 1000 simulated shots.';
+  }
+
+  // Landscape heatmap (p = 1 only)
+  function heatData() {
+    var key = mixer; if (heatCache[key]) return heatCache[key];
+    var nx = 120, ny = 64, vals = new Float64Array(nx * ny), lo = Infinity, hi = -Infinity;
+    for (var j = 0; j < ny; j++) for (var i = 0; i < nx; i++) {
+      var g = 2 * Math.PI * (i + 0.5) / nx, b = Math.PI * (1 - (j + 0.5) / ny);
+      var v = Q.expectation([g, b], mixer); vals[j * nx + i] = v; if (v < lo) lo = v; if (v > hi) hi = v;
+    }
+    return (heatCache[key] = { nx: nx, ny: ny, vals: vals, lo: lo, hi: hi });
+  }
+  function cmap(t) { // dark (low cost) to bright (high cost)
+    var stops = [[6, 19, 38], [20, 60, 120], [34, 211, 238], [250, 204, 21], [251, 113, 133]];
+    var x = Math.min(0.9999, Math.max(0, t)) * (stops.length - 1), k = Math.floor(x), f = x - k, a = stops[k], b = stops[k + 1];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  }
+  var heatImg = {};
+  function drawHeat() {
+    var c = $('heat'), r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
+    c.width = Math.max(10, r.width * d); c.height = Math.max(10, r.height * d);
+    var g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+    var w = r.width, h = r.height, L = 34, B = 24, T = 6, R = 6;
+    g.clearRect(0, 0, w, h);
+    if (p !== 1) {
+      g.fillStyle = '#93abcb'; g.font = '14px "IBM Plex Sans", sans-serif';
+      g.fillText('The map shows p = 1 only. With p = ' + p + ' there are ' + (2 * p) + ' angles.', 16, h / 2 - 8);
+      g.fillText('Use the sliders or press Optimize.', 16, h / 2 + 14);
+      return;
+    }
+    var H = heatData();
+    if (!heatImg[mixer]) {
+      var off = document.createElement('canvas'); off.width = H.nx; off.height = H.ny;
+      var og = off.getContext('2d'), im = og.createImageData(H.nx, H.ny);
+      for (var k = 0; k < H.nx * H.ny; k++) { var col = cmap((H.vals[k] - H.lo) / (H.hi - H.lo)); im.data[4 * k] = col[0]; im.data[4 * k + 1] = col[1]; im.data[4 * k + 2] = col[2]; im.data[4 * k + 3] = 255; }
+      og.putImageData(im, 0, 0); heatImg[mixer] = off;
+    }
+    g.imageSmoothingEnabled = true; g.drawImage(heatImg[mixer], L, T, w - L - R, h - T - B);
+    var X = function (gm) { return L + (w - L - R) * gm / (2 * Math.PI); }, Y = function (bt) { return T + (h - T - B) * (1 - bt / Math.PI); };
+    g.fillStyle = '#93abcb'; g.font = '11px "IBM Plex Mono", monospace';
+    [0, 1.57, 3.14, 4.71, 6.28].forEach(function (v, i) { g.fillText(['0', 'π/2', 'π', '3π/2', '2π'][i], Math.min(w - 26, X(v) - 8), h - 7); });
+    [0, 1.57, 3.14].forEach(function (v, i) { g.fillText(['0', 'π/2', 'π'][i], 4, Y(v) + 4); });
+    if (path.length > 1) {
+      g.strokeStyle = 'rgba(233,242,255,0.9)'; g.lineWidth = 1.5; g.beginPath();
+      path.forEach(function (q, k) { var px = X(wrapG(q[0])), py = Y(wrapB(q[1])); if (k === 0) g.moveTo(px, py); else g.lineTo(px, py); });
+      g.stroke();
+    }
+    g.strokeStyle = '#ffffff'; g.lineWidth = 2.5; g.beginPath(); g.arc(X(wrapG(th[0])), Y(wrapB(th[1])), 7, 0, 7); g.stroke();
+  }
+  $('heat').addEventListener('click', function (e) {
+    if (p !== 1) return; stopOpt();
+    var r = this.getBoundingClientRect(), L = 34, B = 24, T = 6, R = 6;
+    var gx = (e.clientX - r.left - L) / (r.width - L - R) * 2 * Math.PI, by = (1 - (e.clientY - r.top - T) / (r.height - T - B)) * Math.PI;
+    th[0] = wrapG(gx); th[1] = wrapB(by); path = []; shotCounts = null; update();
+  });
+
+  function stopOpt() { if (optTimer) { clearInterval(optTimer); optTimer = null; $('opt').textContent = 'Optimize angles'; } }
+  $('opt').addEventListener('click', function () {
+    if (optTimer) { stopOpt(); return; }
+    shotCounts = null;
+    var res = Q.nelderMead(function (x) { return Q.expectation(x, mixer); }, th.slice(), { maxIt: 400, tol: 1e-10, step: 0.35 });
+    var steps = res.path, k = 0; path = [th.slice()];
+    $('opt').textContent = 'Stop';
+    optTimer = setInterval(function () {
+      k = Math.min(steps.length - 1, k + (reduce ? 8 : 2));
+      th = steps[k].slice(); path.push(th.slice()); update();
+      if (k >= steps.length - 1) stopOpt();
+    }, reduce ? 30 : 60);
+  });
+  $('bestBtn').addEventListener('click', function () { stopOpt(); th = BESTA[mixer + p].x.slice(); path = []; shotCounts = null; update(); });
+  $('reset').addEventListener('click', function () { stopOpt(); th = DEFAULT[p].slice(); path = []; shotCounts = null; update(); });
+  $('shotBtn').addEventListener('click', function () {
+    var r = Q.simulate(th, mixer);
+    shotCounts = Array.from(Q.shots(r.probs, 1000, parseFloat($('eps').value), (Date.now() & 0xffff) + 1));
+    update();
+  });
+  $('eps').addEventListener('input', function () { $('epsOut').textContent = (100 * parseFloat(this.value)).toFixed(1) + ' %'; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-mx]'), function (b) {
+    b.addEventListener('click', function () {
+      stopOpt(); mixer = b.dataset.mx; path = []; shotCounts = null;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-mx]'), function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      update();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-p]'), function (b) {
+    b.addEventListener('click', function () {
+      stopOpt(); p = parseInt(b.dataset.p, 10); th = DEFAULT[p].slice(); path = []; shotCounts = null;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-p]'), function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      sliderHTML(); update();
+    });
+  });
+  window.addEventListener('resize', drawHeat);
+  sliderHTML(); update();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Brain That Spikes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Lab oscilloscope on the grid console: navy base, cyan membrane trace, yellow spikes, violet inputs. */
+  --bg: #061326;
+  --panel: #0b1f3a;
+  --panel-2: #0f2850;
+  --line: #1d3d68;
+  --ink: #e9f2ff;
+  --muted: #93abcb;
+  --accent: #22d3ee;
+  --spike: #facc15;
+  --violet: #a78bfa;
+  --good: #4ade80;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* Layout: neuron scene beside the controls, the scope trace full width, then the energy estimate. */
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+header { display: grid; gap: 4px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1; margin: 0; }
+.tag { color: var(--muted); margin: 2px 0 0; font-size: 15px; max-width: 80ch; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.top { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px; }
+canvas { display: block; width: 100%; }
+#scene { height: auto; border-radius: 14px; cursor: pointer; }
+.ctl { padding: 14px; display: grid; gap: 12px; align-content: start; }
+.ctl h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { font: 600 14px var(--font-body); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--spike); color: #261d00; border-color: var(--spike); }
+.btn:focus-visible, .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.seg button { font: 600 14px var(--font-body); color: var(--muted); background: var(--panel-2); border: 0; padding: 10px 14px; cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #032031; }
+.sl { display: grid; grid-template-columns: 150px minmax(0, 1fr) 80px; gap: 10px; align-items: center; font-size: 14px; }
+.sl span { color: var(--muted); }
+.sl input { width: 100%; accent-color: var(--accent); }
+.sl output { font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tile { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 2px; }
+.tile .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.tile .v { font-family: var(--font-display); font-size: 34px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12px; color: var(--muted); min-height: 16px; }
+.scope { padding: 12px; display: grid; gap: 6px; }
+.scope h3 { margin: 0; font-size: 14px; color: var(--muted); font-weight: 600; }
+#trace { height: 230px; }
+#raster { height: 70px; }
+.energy { padding: 14px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.energy h2 { margin: 0 0 6px; font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+.ebar { display: grid; grid-template-columns: 150px minmax(0, 1fr) 110px; gap: 10px; align-items: center; font-size: 14px; margin: 8px 0; }
+.ebar .tr { height: 24px; background: #0a1a33; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.ebar .tr i { display: block; height: 100%; }
+.ebar b { font-family: var(--font-mono); text-align: right; font-weight: 600; }
+.ratio { font-family: var(--font-display); font-size: 44px; font-weight: 700; color: var(--good); line-height: 1; }
+.ratio small { font-family: var(--font-body); font-size: 14px; color: var(--muted); font-weight: 400; }
+.eq { font-family: var(--font-mono); color: var(--ink); background: #0a1a33; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: block; margin: 6px 0; font-size: 13px; overflow-x: auto; white-space: nowrap; }
+.muted { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0; }
+details { padding: 12px 16px; }
+details summary { cursor: pointer; font-weight: 600; }
+details .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 10px; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 4px 0 10px; }
+@media (max-width: 900px) { .top, .energy, details .cols { grid-template-columns: 1fr; } .sl { grid-template-columns: 120px minmax(0, 1fr) 70px; } }
+@media (max-width: 520px) { .tile .v { font-size: 26px; } .ebar { grid-template-columns: 96px minmax(0, 1fr) 90px; font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Episode 6 · SNN: neurons that spike</span>
+    <h1>A Brain That Spikes</h1>
+    <p class="tag">Your brain runs on about 20 W. Its neurons stay quiet until an event arrives, then fire one short spike. Turn on the sound and feed this neuron. Each click is one spike.</p>
+  </header>
+
+  <div class="top">
+    <div class="card"><canvas id="scene" width="640" height="380" aria-label="A neuron with input synapses; tap to send a burst of input spikes"></canvas></div>
+    <div class="card ctl">
+      <h2>Feed the neuron</h2>
+      <div class="row">
+        <button class="btn primary" id="sound">Turn on sound</button>
+        <button class="btn" id="burst">Send a burst</button>
+        <div class="seg" role="group" aria-label="Input type">
+          <button data-in="poisson" aria-pressed="true">Random input spikes</button>
+          <button data-in="current" aria-pressed="false">Steady current</button>
+        </div>
+      </div>
+      <label class="sl" id="rowRate" for="rate"><span>Input rate (20 synapses)</span><input type="range" id="rate" min="0" max="60" step="1" value="12"><output id="rateO">12 Hz</output></label>
+      <label class="sl" id="rowW" for="w"><span>Synapse weight</span><input type="range" id="w" min="0.2" max="3" step="0.1" value="1.2"><output id="wO">1.2 mV</output></label>
+      <label class="sl" id="rowI" for="drive" style="display:none"><span>Drive R·I</span><input type="range" id="drive" min="0" max="40" step="0.5" value="20"><output id="driveO">20.0 mV</output></label>
+      <div class="tiles">
+        <div class="tile"><span class="k">Output rate</span><span class="v" id="outRate">0</span><span class="s">spikes per second</span></div>
+        <div class="tile"><span class="k">Input events</span><span class="v" id="inRate">0</span><span class="s">per second</span></div>
+        <div class="tile"><span class="k">Theory</span><span class="v" id="theory">–</span><span class="s" id="theoryS">steady current only</span></div>
+      </div>
+      <p class="muted">Tap the neuron for a burst. Below threshold nothing happens and no work is done; that silence is where the energy gain comes from.</p>
+    </div>
+  </div>
+
+  <div class="card scope">
+    <h3>Membrane potential V(t), last 0.5 s (mV)</h3>
+    <canvas id="trace" aria-label="Membrane potential trace with threshold line"></canvas>
+    <h3>Spike raster: inputs (violet) and output (yellow)</h3>
+    <canvas id="raster" aria-label="Spike raster"></canvas>
+  </div>
+
+  <div class="card energy">
+    <div>
+      <h2>Energy per decision: dense ANN vs SNN actor</h2>
+      <p class="muted">Example actor size: 64 inputs, 32 hidden units, 4 actions. A dense ANN does every multiply-accumulate (MAC) at each decision. An SNN does one accumulate (AC) per spike, per synapse, over T time steps.</p>
+      <label class="sl" for="T"><span>Time steps T</span><input type="range" id="T" min="1" max="16" step="1" value="8"><output id="TO">8</output></label>
+      <label class="sl" for="act"><span>Mean activity</span><input type="range" id="act" min="0.5" max="40" step="0.5" value="5"><output id="actO">5.0 %</output></label>
+      <div class="row"><button class="btn" id="useLive">Use the live neuron rate</button><span class="muted" id="liveNote"></span></div>
+    </div>
+    <div>
+      <div class="ebar"><span>Dense ANN</span><span class="tr"><i id="barA" style="background:#fb7185"></i></span><b id="eA">0</b></div>
+      <div class="ebar"><span>SNN actor</span><span class="tr"><i id="barS" style="background:#4ade80"></i></span><b id="eS">0</b></div>
+      <div class="ratio" id="ratio">0× <small>less compute energy</small></div>
+      <span class="eq">E_ANN = N_MAC · 4.6 pJ      E_SNN = N_AC · 0.9 pJ   (45 nm, 32-bit float)</span>
+      <p class="muted">First-order compute estimate after Horowitz (ISSCC 2014). Memory access and the cost of state upkeep on neuromorphic chips are not included, so real gains are smaller. In QS-MARL each microgrid agent runs such an SNN actor at the edge.</p>
+    </div>
+  </div>
+
+  <details class="card">
+    <summary>Model, equations and checks</summary>
+    <div class="cols">
+      <div>
+        <span class="eq">τ_m dV/dt = −(V − V_rest) + R·I(t)</span>
+        <span class="eq">if V ≥ V_th: spike, V ← V_reset, refractory 2 ms</span>
+        <p class="muted">Leaky integrate-and-fire neuron: τ_m = 20 ms, V_rest = −65 mV, V_th = −50 mV, V_reset = −70 mV. Each input spike lifts V by the synapse weight (delta synapse). Euler step 0.1 ms.</p>
+      </div>
+      <div>
+        <span class="eq">f = 1 / ( t_ref + τ_m · ln[(V∞ − V_reset)/(V∞ − V_th)] ),   V∞ = V_rest + R·I</span>
+        <p class="muted">With a steady current the measured rate is compared with this closed form. References: Gerstner, Kistler, Naud and Paninski (2014) <i>Neuronal Dynamics</i>; Maass (1997) Neural Networks 10(9); Horowitz (2014) ISSCC; Balasubramanian (2021) PNAS 118(32) for the 20 W brain.</p>
+      </div>
+    </div>
+  </details>
+  <footer>ITSR FDP 2026 · Session 04 · Dr. Lilia Tightiz, Sejong University · Simulation, made for class use</footer>
+</div>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var P = { tau: 20, vr: -65, vt: -50, vreset: -70, tref: 2, dt: 0.1, nSyn: 20 };
+  var V = P.vr, refr = 0, tNow = 0, mode = 'poisson', rate = 12, w = 1.2, drive = 20;
+  var hist = [], inEv = [], outEv = [], audio = null, soundOn = false, flash = 0, pending = [];
+  var WIN = 500; // ms on screen
+  function rnd() { return Math.random(); }
+
+  function simulate(ms) {
+    var steps = Math.round(ms / P.dt), pIn = rate * P.nSyn * P.dt / 1000;
+    for (var s = 0; s < steps; s++) {
+      tNow += P.dt;
+      var jump = 0;
+      if (mode === 'poisson') {
+        // number of input spikes in this small step (Bernoulli is accurate since pIn << 1)
+        if (rnd() < pIn) { jump += w; inEv.push({ t: tNow, syn: Math.floor(rnd() * P.nSyn) }); }
+      }
+      while (pending.length && pending[0].t <= tNow) { var e = pending.shift(); jump += e.w; inEv.push({ t: tNow, syn: e.syn }); }
+      if (refr > 0) { refr -= P.dt; V = P.vreset; }
+      else {
+        var RI = mode === 'current' ? drive : 0;
+        V += P.dt / P.tau * (-(V - P.vr) + RI) + jump;
+        if (V >= P.vt) { outEv.push(tNow); V = P.vreset; refr = P.tref; flash = 1; click(); hist.push({ t: tNow, v: 20 }); }
+      }
+      if (s % 5 === 0) hist.push({ t: tNow, v: V });
+    }
+    var cut = tNow - 2000;
+    while (hist.length && hist[0].t < tNow - WIN) hist.shift();
+    while (inEv.length && inEv[0].t < cut) inEv.shift();
+    while (outEv.length && outEv[0] < cut) outEv.shift();
+  }
+  var lastClick = 0;
+  function click() {
+    if (!soundOn || !audio) return;
+    var now = audio.currentTime; if (now - lastClick < 0.008) return; lastClick = now;
+    var o = audio.createOscillator(), g = audio.createGain();
+    o.type = 'square'; o.frequency.value = 1400;
+    g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.25, now + 0.001); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.012);
+    o.connect(g); g.connect(audio.destination); o.start(now); o.stop(now + 0.015);
+  }
+  function theory() {
+    if (mode !== 'current') return null;
+    var vinf = P.vr + drive;
+    if (vinf <= P.vt) return 0;
+    return 1000 / (P.tref + P.tau * Math.log((vinf - P.vreset) / (vinf - P.vt)));
+  }
+
+  // ---------- scene ----------
+  var sc = $('scene'), g = sc.getContext('2d'), SW = 640, SH = 380, NX = 360, NY = 190;
+  function fit() { var d = Math.min(2, window.devicePixelRatio || 1); sc.width = SW * d; sc.height = SH * d; g.setTransform(d, 0, 0, d, 0, 0); }
+  var DEN = []; for (var i = 0; i < P.nSyn; i++) { var a = Math.PI * (0.55 + 0.9 * i / (P.nSyn - 1)); DEN.push([NX + 220 * Math.cos(a), NY - 150 * Math.sin(a) * 0.9 + 10]); }
+  function drawScene() {
+    var bg = g.createRadialGradient(NX, NY, 20, NX, NY, 380);
+    bg.addColorStop(0, '#0f2c55'); bg.addColorStop(1, '#050d1f');
+    g.fillStyle = bg; g.fillRect(0, 0, SW, SH);
+    // dendrites and input pulses
+    DEN.forEach(function (p, j) {
+      g.strokeStyle = 'rgba(167,139,250,0.35)'; g.lineWidth = 2; g.beginPath(); g.moveTo(p[0], p[1]); g.quadraticCurveTo((p[0] + NX) / 2, (p[1] + NY) / 2 - 20, NX, NY); g.stroke();
+      g.fillStyle = '#a78bfa'; g.beginPath(); g.arc(p[0], p[1], 4, 0, 7); g.fill();
+    });
+    inEv.forEach(function (e) {
+      var age = tNow - e.t; if (age > 60) return;
+      var p = DEN[e.syn], u = age / 60, x = p[0] + (NX - p[0]) * u, y = p[1] + (NY - p[1]) * u - 20 * Math.sin(Math.PI * u);
+      g.fillStyle = '#c4b5fd'; g.shadowColor = '#a78bfa'; g.shadowBlur = 10; g.beginPath(); g.arc(x, y, 4, 0, 7); g.fill(); g.shadowBlur = 0;
+    });
+    // axon
+    g.strokeStyle = 'rgba(250,204,21,0.45)'; g.lineWidth = 4; g.beginPath(); g.moveTo(NX, NY + 30); g.bezierCurveTo(NX + 10, NY + 110, NX + 160, NY + 120, SW - 40, NY + 150); g.stroke();
+    outEv.forEach(function (t0) {
+      var age = tNow - t0; if (age > 120) return;
+      var u = age / 120, ax = NX + (SW - 40 - NX) * u, ay = NY + 30 + 120 * Math.sin(Math.PI * u * 0.5);
+      g.fillStyle = '#facc15'; g.shadowColor = '#facc15'; g.shadowBlur = 16; g.beginPath(); g.arc(ax, ay, 6, 0, 7); g.fill(); g.shadowBlur = 0;
+    });
+    // soma: fill shows how close V is to threshold
+    var lvl = Math.max(0, Math.min(1, (V - P.vreset) / (P.vt - P.vreset)));
+    var rg = g.createRadialGradient(NX, NY, 4, NX, NY, 46);
+    rg.addColorStop(0, flash > 0 ? 'rgba(250,204,21,' + (0.6 + 0.4 * flash) + ')' : 'rgba(34,211,238,' + (0.25 + 0.6 * lvl) + ')');
+    rg.addColorStop(1, 'rgba(15,40,80,0.9)');
+    g.fillStyle = rg; g.beginPath(); g.arc(NX, NY, 44, 0, 7); g.fill();
+    g.strokeStyle = flash > 0 ? '#facc15' : '#22d3ee'; g.lineWidth = 3; g.beginPath(); g.arc(NX, NY, 44, 0, 7); g.stroke();
+    // threshold meter around soma
+    g.strokeStyle = '#facc15'; g.lineWidth = 5; g.beginPath(); g.arc(NX, NY, 54, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * lvl); g.stroke();
+    g.fillStyle = '#e9f2ff'; g.font = '700 22px "IBM Plex Mono", monospace'; g.textAlign = 'center';
+    g.fillText(V.toFixed(1), NX, NY + 4); g.font = '12px "IBM Plex Sans", sans-serif'; g.fillStyle = '#93abcb'; g.fillText('mV', NX, NY + 22);
+    g.textAlign = 'left';
+    g.fillStyle = '#93abcb'; g.font = '12px "IBM Plex Sans", sans-serif';
+    g.fillText('20 input synapses', 18, 28); g.fillText('Ring: distance to threshold (−50 mV)', 18, SH - 40); g.fillText('Axon: each yellow pulse is one output spike', 18, SH - 22);
+    flash = Math.max(0, flash - 0.08);
+  }
+
+  // ---------- scope ----------
+  function setup(c) { var r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); c.width = Math.max(10, r.width * d); c.height = Math.max(10, r.height * d); var x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { x: x, w: r.width, h: r.height }; }
+  function drawScope() {
+    var a = setup($('trace')), x = a.x, w = a.w, h = a.h, L = 44, R = 8, T = 8, B = 18;
+    x.clearRect(0, 0, w, h);
+    var vmin = -75, vmax = 25, X = function (t) { return L + (w - L - R) * (1 - (tNow - t) / WIN); }, Y = function (v) { return T + (h - T - B) * (1 - (v - vmin) / (vmax - vmin)); };
+    x.font = '11px "IBM Plex Mono", monospace'; x.fillStyle = '#93abcb'; x.strokeStyle = 'rgba(147,171,203,0.14)';
+    [-70, -50, -30, -10, 10].forEach(function (v) { x.beginPath(); x.moveTo(L, Y(v)); x.lineTo(w - R, Y(v)); x.stroke(); x.fillText(String(v), 6, Y(v) + 4); });
+    x.strokeStyle = '#facc15'; x.setLineDash([6, 5]); x.beginPath(); x.moveTo(L, Y(P.vt)); x.lineTo(w - R, Y(P.vt)); x.stroke(); x.setLineDash([]);
+    x.fillStyle = '#facc15'; x.fillText('threshold', w - R - 70, Y(P.vt) - 5);
+    x.strokeStyle = '#22d3ee'; x.lineWidth = 2; x.beginPath();
+    hist.forEach(function (p, j) { var px = X(p.t), py = Y(p.v); if (j === 0) x.moveTo(px, py); else x.lineTo(px, py); });
+    x.stroke();
+    x.fillStyle = '#93abcb'; x.fillText('−0.5 s', L, h - 4); x.fillText('now', w - R - 26, h - 4);
+    var b = setup($('raster')), r = b.x;
+    r.clearRect(0, 0, b.w, b.h);
+    var X2 = function (t) { return L + (b.w - L - R) * (1 - (tNow - t) / WIN); };
+    r.fillStyle = '#93abcb'; r.font = '11px "IBM Plex Mono", monospace'; r.fillText('in', 8, 24); r.fillText('out', 8, 56);
+    inEv.forEach(function (e) { if (tNow - e.t > WIN) return; r.fillStyle = '#a78bfa'; r.fillRect(X2(e.t), 6 + (e.syn % 20) * 1.6, 2, 2.5); });
+    outEv.forEach(function (t0) { if (tNow - t0 > WIN) return; r.fillStyle = '#facc15'; r.fillRect(X2(t0) - 1, 44, 3, 20); });
+  }
+
+  // ---------- readouts and energy ----------
+  function countSince(arr, ms, key) { var n = 0; for (var i = arr.length - 1; i >= 0; i--) { var t = key ? arr[i][key] : arr[i]; if (tNow - t <= ms) n++; else break; } return n; }
+  var liveRate = 0;
+  function readouts() {
+    liveRate = countSince(outEv, 1000) ;
+    $('outRate').textContent = liveRate.toFixed(0);
+    $('inRate').textContent = countSince(inEv, 1000, 't').toFixed(0);
+    var th = theory();
+    $('theory').textContent = th === null ? '–' : th.toFixed(1);
+    $('theoryS').textContent = th === null ? 'steady current only' : 'Hz from the closed form';
+  }
+  function energy() {
+    var T = parseInt($('T').value, 10), act = parseFloat($('act').value) / 100;
+    var syn = 64 * 32 + 32 * 4, nMAC = syn, nAC = act * T * syn;
+    var eA = nMAC * 4.6, eS = nAC * 0.9; // pJ
+    var mx = Math.max(eA, eS);
+    $('barA').style.width = (100 * eA / mx).toFixed(1) + '%'; $('barS').style.width = (100 * eS / mx).toFixed(1) + '%';
+    $('eA').textContent = (eA / 1000).toFixed(2) + ' nJ'; $('eS').textContent = (eS / 1000).toFixed(2) + ' nJ';
+    $('ratio').innerHTML = (eA / eS).toFixed(1) + '× <small>' + (eA > eS ? 'less compute energy for the SNN' : 'more compute energy for the SNN') + '</small>';
+    $('TO').textContent = T; $('actO').textContent = (100 * act).toFixed(1) + ' %';
+  }
+
+  var last = performance.now(), rd = 0;
+  function frame(now) {
+    var ms = Math.min(50, now - last); last = now;
+    simulate(reduce ? ms * 0.5 : ms);
+    drawScene(); drawScope();
+    rd += ms; if (rd > 250) { readouts(); rd = 0; }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- controls ----------
+  $('sound').addEventListener('click', function () {
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+      soundOn = !soundOn; this.textContent = soundOn ? 'Sound on: one click per spike' : 'Turn on sound';
+    } catch (e) { this.textContent = 'Sound is blocked here'; }
+  });
+  function burst() { for (var i = 0; i < 14; i++) pending.push({ t: tNow + i * 1.2, w: 2.2, syn: Math.floor(rnd() * P.nSyn) }); }
+  $('burst').addEventListener('click', burst);
+  sc.addEventListener('click', burst);
+  $('rate').addEventListener('input', function () { rate = parseFloat(this.value); $('rateO').textContent = rate + ' Hz'; });
+  $('w').addEventListener('input', function () { w = parseFloat(this.value); $('wO').textContent = w.toFixed(1) + ' mV'; });
+  $('drive').addEventListener('input', function () { drive = parseFloat(this.value); $('driveO').textContent = drive.toFixed(1) + ' mV'; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-in]'), function (b) {
+    b.addEventListener('click', function () {
+      mode = b.dataset.in;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-in]'), function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      $('rowRate').style.display = mode === 'poisson' ? '' : 'none'; $('rowW').style.display = mode === 'poisson' ? '' : 'none'; $('rowI').style.display = mode === 'current' ? '' : 'none';
+    });
+  });
+  $('T').addEventListener('input', energy); $('act').addEventListener('input', energy);
+  $('useLive').addEventListener('click', function () {
+    // activity per time step: rate (Hz) times 1 ms step, as a share of possible spikes
+    var a = Math.max(0.5, Math.min(40, liveRate * 1 / 1000 * 100 * 10));
+    $('act').value = a; energy();
+    $('liveNote').textContent = liveRate.toFixed(0) + ' Hz at 10 ms per time step gives ' + a.toFixed(1) + ' % activity';
+  });
+  window.addEventListener('resize', fit);
+  fit(); energy(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent City Stress Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Regional control room at night: navy map, cyan energy flows, rose for outages, amber for limit breaches. */
+  --bg: #061326;
+  --panel: #0b1f3a;
+  --panel-2: #0f2850;
+  --line: #1d3d68;
+  --ink: #e9f2ff;
+  --muted: #93abcb;
+  --accent: #22d3ee;
+  --accent-2: #2dd4bf;
+  --bad: #fb7185;
+  --warn: #f59e0b;
+  --good: #4ade80;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* Layout: control bar, then the network map beside the live scoreboard and event buttons, then the outage chart. */
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+header { display: grid; gap: 4px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1; margin: 0; text-wrap: balance; }
+.tag { color: var(--muted); margin: 2px 0 0; font-size: 15px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.bar { padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.seg button { font: 600 14px var(--font-body); color: var(--muted); background: var(--panel-2); border: 0; padding: 10px 14px; cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #032031; }
+.btn { font: 600 14px var(--font-body); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: #032031; border-color: var(--accent); }
+.btn.arm { border-color: var(--warn); color: var(--warn); }
+.btn:focus-visible, .seg button:focus-visible, .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch { display: inline-flex; align-items: center; gap: 8px; font: 600 14px var(--font-body); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px 6px 6px; cursor: pointer; }
+.switch i { width: 38px; height: 22px; border-radius: 99px; background: #334a6b; position: relative; transition: background .2s; }
+.switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #e9f2ff; transition: left .2s; }
+.switch[aria-checked="true"] i { background: var(--good); }
+.switch[aria-checked="true"] i::after { left: 19px; }
+.clock { margin-left: auto; font-family: var(--font-display); font-size: 34px; font-weight: 700; letter-spacing: .02em; }
+.main { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.map { position: relative; }
+.map canvas { display: block; width: 100%; height: auto; border-radius: 14px; cursor: pointer; }
+.hint { position: absolute; left: 12px; top: 12px; background: rgba(245,158,11,.14); border: 1px solid var(--warn); color: var(--warn); border-radius: 10px; padding: 6px 10px; font-size: 13px; display: none; }
+.hint.show { display: block; }
+.side { display: grid; gap: 12px; align-content: start; }
+.panel { padding: 12px; display: grid; gap: 10px; }
+.panel h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 7px 6px; text-align: right; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; color: var(--muted); font-weight: 400; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+td { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+td.win { color: var(--good); }
+td.lose { color: var(--bad); }
+.lights { font-family: var(--font-display); font-size: 26px; font-weight: 700; }
+.lights small { font-family: var(--font-body); font-size: 13px; color: var(--muted); font-weight: 400; }
+.events { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.events .btn { text-align: left; display: grid; gap: 2px; }
+.events .btn small { font: 400 12px var(--font-body); color: var(--muted); }
+.log { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: grid; gap: 3px; max-height: 120px; overflow-y: auto; }
+.log b { color: var(--ink); font-weight: 600; }
+.chart { padding: 12px; display: grid; gap: 6px; }
+.chart h3 { margin: 0; font-size: 14px; color: var(--muted); font-weight: 600; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.legend { display: inline-flex; gap: 12px; font-weight: 400; font-size: 12px; }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; }
+#cUns { width: 100%; height: 190px; display: block; }
+details { padding: 12px 16px; }
+details summary { cursor: pointer; font-weight: 600; }
+details .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.eq { font-family: var(--font-mono); color: var(--ink); background: #0a1a33; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: block; margin: 6px 0; font-size: 13px; overflow-x: auto; white-space: nowrap; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 4px 0 10px; }
+@media (max-width: 960px) { .main, details .cols { grid-template-columns: 1fr; } .clock { margin-left: 0; } }
+@media (max-width: 520px) { .events { grid-template-columns: 1fr; } .seg button { padding: 9px 8px; font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Episodes 9 and 10 · Constraint-aware decisions and resilience</span>
+    <h1>Agent City Stress Test</h1>
+    <p class="tag">Ten microgrids, one substation, one day. The same day runs twice at once: once with a central control centre, once with decentralized agents. Break things and see who keeps the lights on.</p>
+  </header>
+
+  <div class="card bar">
+    <div class="seg" role="group" aria-label="Map view">
+      <button data-mode="central" aria-pressed="false">Central control centre</button>
+      <button data-mode="decentral" aria-pressed="true">Decentralized agents</button>
+    </div>
+    <button class="switch" id="shield" role="switch" aria-checked="true"><i></i>Safety shield ON</button>
+    <button class="btn primary" id="play">Play</button>
+    <div class="seg" role="group" aria-label="Speed">
+      <button data-sp="1" aria-pressed="true">1×</button>
+      <button data-sp="4" aria-pressed="false">4×</button>
+    </div>
+    <button class="btn" id="storm">Storm day preset</button>
+    <button class="btn" id="reset">Reset day</button>
+    <span class="clock" id="clock">06:00</span>
+  </div>
+
+  <div class="main">
+    <div class="card map">
+      <canvas id="map" width="760" height="600" aria-label="Network map of ten microgrids around a substation"></canvas>
+      <div class="hint" id="hint">Tap a link on the map to cut it</div>
+    </div>
+    <div class="side">
+      <div class="card panel">
+        <h2>Live score: same day, same events</h2>
+        <div class="lights" id="lights">10 of 10 <small>microgrids fully served now</small></div>
+        <table aria-label="Score for both control designs">
+          <thead><tr><th></th><th>Central</th><th>Decentral</th></tr></thead>
+          <tbody id="score"></tbody>
+        </table>
+      </div>
+      <div class="card panel">
+        <h2>Break something</h2>
+        <div class="events">
+          <button class="btn" id="evCloud">Cloud burst<small>solar falls to 25 % for 2 h</small></button>
+          <button class="btn" id="evCut">Cut a link<small>then tap a line on the map</small></button>
+          <button class="btn" id="evAgent">Agent down<small>then tap a microgrid</small></button>
+          <button class="btn" id="evCC">Control centre down<small>for the rest of the day</small></button>
+          <button class="btn" id="evTrip">Substation trip<small>no grid for 3 h</small></button>
+          <button class="btn" id="evUndo">Clear all events<small>replay the day from 06:00</small></button>
+        </div>
+        <div class="log" id="log"><span>No events yet. The day is calm.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card chart">
+    <h3>Unserved energy so far (kWh)<span class="legend"><span><i style="background:#f59e0b"></i>central</span><span><i style="background:#22d3ee"></i>decentral</span></span></h3>
+    <canvas id="cUns" aria-label="Cumulative unserved energy for both designs"></canvas>
+  </div>
+
+  <details class="card">
+    <summary>How the city works (model, rules and checks)</summary>
+    <div class="cols">
+      <div>
+        <p><b>Network.</b> Ten microgrids on a ring (70 kW links) and a substation bus with three feeders (150 kW each). Grid import is capped at 380 kW, export at 150 kW. Each microgrid has its own solar, load and battery.</p>
+        <p><b>Agent rule.</b> Store solar surplus; cover the evening peak from the battery above a 25 % reserve; top up from the grid in the cheap solar window. If the grid is lost, the reserve is used down to the 10 % band. Exploration noise is added, as in a policy that still learns. This rule is illustrative; it is not the QS-MARL model.</p>
+        <span class="eq">shield:  b ← clip(b, −P_dis(s), P_ch(s)),  10 % ≤ SoC ≤ 90 %,  |flow| ≤ link rating</span>
+        <p><b>Safety shield.</b> When ON, every battery action and every link flow is projected onto its limits before it reaches the hardware. When OFF, raw actions are applied and each breach is counted.</p>
+      </div>
+      <div>
+        <p><b>Central control centre.</b> One controller sets all batteries and routes energy with an exact max-flow (Edmonds-Karp): local exchange first, then import, then export. If the centre is lost, every unit holds and only the three feeders still serve their own microgrid.</p>
+        <p><b>Decentralized agents.</b> Each agent sets its own battery. A microgrid in need sends a request that travels at most 3 links through live neighbours; the first node that can give answers, and energy flows back along that exact path (up to 8 rounds per 15 min). An agent that is down cannot ask, give or relay.</p>
+        <span class="eq">each node:  pv − curtail − b + inflow − outflow + unserved = load</span>
+        <p><b>Checks.</b> The balance above is audited at every node in every 15-min step; the largest error is about 1e-13 kW. With the shield ON, the count of breaches stays at zero.</p>
+      </div>
+    </div>
+  </details>
+  <footer>ITSR FDP 2026 · Session 04 · Dr. Lilia Tightiz, Sejong University · Illustrative network-flow model, synthetic data</footer>
+</div>
+
+<script>// Agent city engine: 10 microgrids on a ring with a substation, 15-min steps, network-flow model.
+// Central mode: one control centre sets batteries and routes energy with an exact max-flow.
+// Decentral mode: each agent sets its battery and trades with neighbours by message rounds only.
+var CityEngine = (function () {
+  'use strict';
+  var DT = 0.25, STEPS = 96, START = 6; // 06:00 to 06:00
+  // type: R residential, C commercial, U campus, I industrial, M mixed. pv kWp, load peak kW, battery kWh / kW
+  var MG = [
+    { id: 'MG1', type: 'R', pv: 40, load: 42, e: 100, p: 40 },
+    { id: 'MG2', type: 'C', pv: 60, load: 46, e: 80, p: 40 },
+    { id: 'MG3', type: 'R', pv: 30, load: 46, e: 60, p: 30 },
+    { id: 'MG4', type: 'U', pv: 80, load: 56, e: 150, p: 50 },
+    { id: 'MG5', type: 'R', pv: 25, load: 50, e: 60, p: 30 },
+    { id: 'MG6', type: 'C', pv: 50, load: 42, e: 80, p: 40 },
+    { id: 'MG7', type: 'R', pv: 45, load: 42, e: 100, p: 40 },
+    { id: 'MG8', type: 'I', pv: 70, load: 60, e: 120, p: 50 },
+    { id: 'MG9', type: 'R', pv: 20, load: 46, e: 60, p: 30 },
+    { id: 'MG10', type: 'M', pv: 55, load: 46, e: 100, p: 40 }
+  ];
+  var NM = MG.length, SUB = NM; // node 10 = substation
+  var LINKS = [];
+  for (var i0 = 0; i0 < NM; i0++) LINKS.push({ a: i0, b: (i0 + 1) % NM, cap: 70, kind: 'ring' });
+  [0, 3, 6].forEach(function (m) { LINKS.push({ a: SUB, b: m, cap: 150, kind: 'feeder' }); });
+  var IMPORT_MAX = 380, EXPORT_MAX = 150;
+  var BAND = [0.10, 0.90], RESERVE = 0.25, ROUNDS = 8, HOPS = 3;
+
+  var SHAPES = {
+    R: [0.35, 0.30, 0.28, 0.28, 0.30, 0.40, 0.60, 0.75, 0.70, 0.55, 0.50, 0.50, 0.55, 0.55, 0.50, 0.50, 0.60, 0.75, 0.90, 1.00, 1.00, 0.90, 0.70, 0.50],
+    C: [0.25, 0.25, 0.25, 0.25, 0.25, 0.30, 0.40, 0.60, 0.85, 0.95, 1.00, 1.00, 0.95, 1.00, 1.00, 0.95, 0.85, 0.70, 0.50, 0.40, 0.35, 0.30, 0.28, 0.25],
+    U: [0.30, 0.30, 0.30, 0.30, 0.30, 0.35, 0.45, 0.65, 0.85, 0.95, 1.00, 1.00, 0.95, 1.00, 1.00, 0.95, 0.85, 0.75, 0.65, 0.60, 0.55, 0.45, 0.38, 0.32],
+    I: [0.65, 0.65, 0.65, 0.65, 0.65, 0.70, 0.80, 0.90, 0.95, 0.95, 0.95, 0.95, 0.90, 0.95, 0.95, 0.95, 0.90, 0.85, 0.75, 0.70, 0.70, 0.68, 0.66, 0.65]
+  };
+  SHAPES.M = SHAPES.R.map(function (v, h) { return 0.5 * (v + SHAPES.C[h]); });
+
+  function mulberry32(a) { return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; var t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function noise(k, i, salt) { var r = mulberry32((k + 1) * 7919 + (i + 1) * 104729 + (salt || 0) * 15485863); var u = r() || 1e-9, v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  function clock(k) { return (START + k * DT) % 24; }
+  function label(k) { var m = Math.round((START * 60 + k * 15) % 1440); var h = Math.floor(m / 60), mi = m % 60; return (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi; }
+  function interp(arr, c) { var h0 = Math.floor(c) % 24, f = c - Math.floor(c), h1 = (h0 + 1) % 24; return arr[h0] + (arr[h1] - arr[h0]) * f; }
+  function pvPerKWp(c) { var mid = c + DT / 2, rise = 6.25, set = 18.5; if (mid <= rise || mid >= set) return 0; return 0.75 * Math.pow(Math.sin(Math.PI * (mid - rise) / (set - rise)), 1.3); }
+
+  // Exogenous data for step k (same for both modes)
+  function data(k, events) {
+    var c = clock(k), cloud = 1;
+    events.forEach(function (e) { if (e.type === 'cloud' && k >= e.k && k < e.k + e.dur) cloud = Math.min(cloud, 0.25); });
+    var pv = [], ld = [];
+    for (var i = 0; i < NM; i++) {
+      var m = MG[i];
+      pv.push(Math.max(0, m.pv * pvPerKWp(c) * cloud * (1 + 0.04 * noise(k, i, 1))));
+      ld.push(Math.max(1, m.load * interp(SHAPES[m.type], c) * (1 + 0.05 * noise(k, i, 2))));
+    }
+    var subUp = true;
+    events.forEach(function (e) { if (e.type === 'trip' && k >= e.k && k < e.k + e.dur) subUp = false; });
+    var linkUp = LINKS.map(function (l, j) { return !events.some(function (e) { return e.type === 'cut' && e.target === j && k >= e.k; }); });
+    var agentUp = MG.map(function (m, j) { return !events.some(function (e) { return e.type === 'agent' && e.target === j && k >= e.k; }); });
+    var ccUp = !events.some(function (e) { return e.type === 'cc' && k >= e.k; });
+    return { c: c, pv: pv, ld: ld, subUp: subUp, linkUp: linkUp, agentUp: agentUp, ccUp: ccUp, cloud: cloud < 1 };
+  }
+
+  // Local battery policy (an illustrative stand-in for a learned policy) plus exploration noise
+  function policy(i, soc, pv, ld, c, k, island) {
+    var m = MG[i], net = pv - ld, b;
+    var evening = c >= 17 && c < 23, midday = c >= 10 && c < 16;
+    if (island) b = net > 0 ? Math.min(net, m.p) : -Math.min(-net, m.p);  // grid lost: the reserve is for this moment
+    else if (net > 0) b = Math.min(net, m.p);                              // store solar surplus
+    else if (evening && soc > RESERVE * m.e) b = -Math.min(-net, m.p);     // cover the evening peak
+    else if (midday && soc < 0.7 * m.e) b = 0.4 * m.p;                     // top up in the cheap solar window
+    else b = 0;
+    return b + 0.18 * m.p * noise(k, i, 3);
+  }
+  // Safety shield: keep the battery inside its band and power rating
+  function shieldB(i, soc, b) {
+    var m = MG[i];
+    var maxC = Math.max(0, Math.min(m.p, (BAND[1] * m.e - soc) / (0.95 * DT)));
+    var maxD = Math.max(0, Math.min(m.p, (soc - BAND[0] * m.e) * 0.95 / DT));
+    return Math.max(-maxD, Math.min(maxC, b));
+  }
+  // Physics without shield: inverter rating and the hard 0..100 % limits still hold
+  function physB(i, soc, b) {
+    var m = MG[i];
+    var maxC = Math.max(0, Math.min(m.p, (m.e - soc) / (0.95 * DT)));
+    var maxD = Math.max(0, Math.min(m.p, soc * 0.95 / DT));
+    return Math.max(-maxD, Math.min(maxC, b));
+  }
+  function socNext(i, soc, b) { return b >= 0 ? soc + 0.95 * b * DT : soc + b / 0.95 * DT; }
+
+  // ---------- max-flow (Edmonds-Karp) on a small graph ----------
+  function maxflow(n, arcs, s, t) { // arcs: [{u,v,cap}] directed; returns flow per arc
+    var adj = []; for (var i = 0; i < n; i++) adj.push([]);
+    var E = [];
+    arcs.forEach(function (a, idx) {
+      E.push({ u: a.u, v: a.v, cap: a.cap, f: 0, rev: E.length + 1, idx: idx });
+      E.push({ u: a.v, v: a.u, cap: 0, f: 0, rev: E.length - 1, idx: -1 });
+      adj[a.u].push(E.length - 2); adj[a.v].push(E.length - 1);
+    });
+    var total = 0;
+    for (var guard = 0; guard < 500; guard++) {
+      var prev = new Int32Array(n).fill(-1), q = [s], seen = new Uint8Array(n); seen[s] = 1;
+      while (q.length && !seen[t]) {
+        var u = q.shift();
+        for (var j = 0; j < adj[u].length; j++) {
+          var e = E[adj[u][j]];
+          if (!seen[e.v] && e.cap - e.f > 1e-9) { seen[e.v] = 1; prev[e.v] = adj[u][j]; q.push(e.v); }
+        }
+      }
+      if (!seen[t]) break;
+      var bott = Infinity, v = t;
+      while (v !== s) { var ee = E[prev[v]]; bott = Math.min(bott, ee.cap - ee.f); v = ee.u; }
+      v = t;
+      while (v !== s) { var e2 = E[prev[v]]; e2.f += bott; E[e2.rev].f -= bott; v = e2.u; }
+      total += bott;
+    }
+    var out = new Float64Array(arcs.length);
+    E.forEach(function (e) { if (e.idx >= 0) out[e.idx] = e.f; });
+    return { total: total, flow: out };
+  }
+
+  function newState(mode, shield) {
+    return { mode: mode, shield: shield, soc: MG.map(function (m) { return 0.5 * m.e; }),
+      tot: { unserved: 0, imp: 0, exp: 0, curt: 0, viol: 0, socViol: 0, linkViol: 0 }, hist: [], maxResidual: 0 };
+  }
+
+  // One 15-min step. Returns a frame for drawing and accounting.
+  function step(S, k, events) {
+    var D = data(k, events), shield = S.shield, central = S.mode === 'central';
+    var ctrl = central ? D.ccUp : true;
+    var b = new Float64Array(NM), x = new Float64Array(NM), status = [];
+    for (var i = 0; i < NM; i++) {
+      var online = central ? (ctrl && D.agentUp[i]) : D.agentUp[i];
+      var raw = online ? policy(i, S.soc[i], D.pv[i], D.ld[i], D.c, k, !D.subUp) : 0;
+      b[i] = shield ? shieldB(i, S.soc[i], raw) : physB(i, S.soc[i], raw);
+      x[i] = D.pv[i] - D.ld[i] - b[i];
+      status.push(online ? 'on' : 'off');
+    }
+    var linkFlow = new Float64Array(LINKS.length); // + means a -> b
+    var sur = Array.from(x, function (v) { return Math.max(0, v); });
+    var def = Array.from(x, function (v) { return Math.max(0, -v); });
+    var imp = 0, exp = 0;
+    var capOf = function (j) { return !D.linkUp[j] ? 0 : (shield ? LINKS[j].cap : 1e6); };
+    var subOK = D.subUp;
+
+    if (central && ctrl) {
+      // Stage A: local sharing among microgrids. Stage B: import. Stage C: export.
+      var stage = function (srcCap, sinkCap, useSub) {
+        var n = NM + 3, s = NM + 1, t = NM + 2, arcs = [], map = [];
+        LINKS.forEach(function (l, j) {
+          if (!useSub && l.kind === 'feeder') return;
+          var c = capOf(j) - 0; if (c <= 0) return;
+          var resAB = c - linkFlow[j], resBA = c + linkFlow[j];
+          arcs.push({ u: l.a, v: l.b, cap: Math.max(0, resAB) }); map.push([j, 1]);
+          arcs.push({ u: l.b, v: l.a, cap: Math.max(0, resBA) }); map.push([j, -1]);
+        });
+        for (var q = 0; q <= NM; q++) {
+          if (srcCap[q] > 1e-9) { arcs.push({ u: s, v: q, cap: srcCap[q] }); map.push(null); }
+          if (sinkCap[q] > 1e-9) { arcs.push({ u: q, v: t, cap: sinkCap[q] }); map.push(null); }
+        }
+        var r = maxflow(n, arcs, s, t);
+        var gotIn = new Float64Array(NM + 1), gaveOut = new Float64Array(NM + 1);
+        arcs.forEach(function (a, idx) {
+          var f = r.flow[idx]; if (f <= 1e-12) return;
+          if (map[idx]) linkFlow[map[idx][0]] += map[idx][1] * f;
+          else if (a.u === s) gaveOut[a.v] += f; else if (a.v === t) gotIn[a.u] += f;
+        });
+        return { gave: gaveOut, got: gotIn };
+      };
+      var zA = sur.concat([0]), dA = def.concat([0]);
+      var rA = stage(zA, dA, false);
+      for (i = 0; i < NM; i++) { sur[i] -= rA.gave[i]; def[i] -= rA.got[i]; }
+      if (subOK) {
+        var srcB = new Array(NM + 1).fill(0); srcB[SUB] = IMPORT_MAX;
+        var rB = stage(srcB, def.concat([0]), true);
+        imp = rB.gave[SUB];
+        for (i = 0; i < NM; i++) def[i] -= rB.got[i];
+        var sinkC = new Array(NM + 1).fill(0); sinkC[SUB] = EXPORT_MAX;
+        var rC = stage(sur.concat([0]), sinkC, true);
+        exp = rC.got[SUB];
+        for (i = 0; i < NM; i++) sur[i] -= rC.gave[i];
+      }
+    } else if (!central) {
+      // Neighbour protocol: a node in need sends a request that travels at most HOPS links through
+      // live agents; the first node that can give answers, and energy flows back along that exact path.
+      var adjL = []; for (i = 0; i <= NM; i++) adjL.push([]);
+      LINKS.forEach(function (l, j) { if (D.linkUp[j]) { adjL[l.a].push([l.b, j]); adjL[l.b].push([l.a, j]); } });
+      var alive = function (q) { return q === SUB ? subOK : D.agentUp[q]; };
+      var resid = function (j, from) { var c = capOf(j), l = LINKS[j]; return from === l.a ? c - linkFlow[j] : c + linkFlow[j]; };
+      var give = sur.concat([0]), need = def.concat([0]);
+      // BFS from a requester; returns path to the nearest node with give > 0 (allowed by canSource)
+      var findPath = function (dst, canSource, viaBus) {
+        var prev = {}, seen = {}, q = [[dst, 0]]; seen[dst] = 1;
+        while (q.length) {
+          var cur = q.shift(), u = cur[0], d = cur[1];
+          if (u !== dst && canSource(u)) {
+            var path = [], v = u; while (v !== dst) { path.push(prev[v]); v = prev[v][0]; } return { src: u, path: path };
+          }
+          if (d >= HOPS) continue;
+          if (u === SUB && !viaBus && u !== dst) continue; // the bus relays only when allowed
+          for (var a = 0; a < adjL[u].length; a++) {
+            var w = adjL[u][a][0], j = adjL[u][a][1];
+            if (seen[w] || !alive(w)) continue;
+            if (resid(j, w) <= 1e-9) continue;            // energy must flow w -> u
+            seen[w] = 1; prev[w] = [u, j, w]; q.push([w, d + 1]);
+          }
+        }
+        return null;
+      };
+      var serve = function (requesters, canSource, takeFrom, viaBus) {
+        for (var r = 0; r < ROUNDS; r++) {
+          var any = false;
+          requesters().forEach(function (dst) {
+            if (need[dst] <= 1e-9) return;
+            var hit = findPath(dst, canSource, viaBus); if (!hit) return;
+            var f = Math.min(need[dst], takeFrom(hit.src, true));
+            hit.path.forEach(function (st) { f = Math.min(f, resid(st[1], st[2])); });
+            if (f <= 1e-9) return;
+            hit.path.forEach(function (st) { var l = LINKS[st[1]]; if (l.a === st[2]) linkFlow[st[1]] += f; else linkFlow[st[1]] -= f; });
+            takeFrom(hit.src, false, f); need[dst] -= f; any = true;
+          });
+          if (!any) break;
+        }
+      };
+      var byNeed = function () { var ids = []; for (var q = 0; q < NM; q++) if (D.agentUp[q] && need[q] > 1e-9) ids.push(q); return ids.sort(function (a, b) { return need[b] - need[a]; }); };
+      var mgGive = function (u, peek, f) { if (u === SUB) return 0; if (peek) return give[u]; give[u] -= f; return 0; };
+      // Phase 1: microgrids share among themselves (the bus does not relay)
+      serve(byNeed, function (u) { return u !== SUB && give[u] > 1e-9; }, mgGive, false);
+      if (subOK) {
+        // Phase 2: requests may reach the substation, which gives up to the import limit
+        var impLeft = IMPORT_MAX;
+        serve(byNeed, function (u) { return (u === SUB && impLeft > 1e-9) || (u !== SUB && give[u] > 1e-9); },
+          function (u, peek, f) { if (u === SUB) { if (peek) return impLeft; impLeft -= f; imp += f; return 0; } return mgGive(u, peek, f); }, true);
+        // Phase 3: the substation requests surplus for export
+        need[SUB] = EXPORT_MAX;
+        serve(function () { return [SUB]; }, function (u) { return u !== SUB && give[u] > 1e-9; }, mgGive, true);
+        exp = EXPORT_MAX - need[SUB]; need[SUB] = 0;
+      }
+      for (i = 0; i < NM; i++) { sur[i] = give[i]; def[i] = need[i]; }
+    } else {
+      // Central control centre down: units hold; only direct feeders give passive import
+      if (subOK) {
+        LINKS.forEach(function (l, j) {
+          if (l.kind !== 'feeder' || !D.linkUp[j]) return;
+          var m = l.b, f = Math.min(def[m], capOf(j), IMPORT_MAX - imp);
+          if (f > 0) { linkFlow[j] += f; def[m] -= f; imp += f; }
+        });
+      }
+    }
+    // passive import for offline agents in decentral mode (direct feeder only)
+    if (!central && subOK) {
+      LINKS.forEach(function (l, j) {
+        if (l.kind !== 'feeder' || !D.linkUp[j] || D.agentUp[l.b]) return;
+        var m = l.b, room = capOf(j) - Math.abs(linkFlow[j]);
+        var f = Math.max(0, Math.min(def[m], room, IMPORT_MAX - imp));
+        if (f > 0) { linkFlow[j] += f; def[m] -= f; imp += f; }
+      });
+    }
+    // Battery update, violations, accounting
+    var frame = { k: k, label: label(k), D: D, b: Array.from(b), flow: Array.from(linkFlow), soc: [], curt: [], uns: [], status: status, imp: imp, exp: exp, socViol: [], linkViol: [] };
+    var stepUns = 0, stepCurt = 0, maxRes = 0;
+    // node balances: pv - curt - b + inflow - outflow + uns = load
+    var inflow = new Float64Array(NM + 1);
+    LINKS.forEach(function (l, j) { inflow[l.b] += linkFlow[j]; inflow[l.a] -= linkFlow[j]; });
+    for (i = 0; i < NM; i++) {
+      var curt = Math.max(0, sur[i]), uns = Math.max(0, def[i]);
+      var resid = D.pv[i] - curt - b[i] + inflow[i] + uns - D.ld[i];
+      maxRes = Math.max(maxRes, Math.abs(resid));
+      S.soc[i] = Math.min(MG[i].e, Math.max(0, socNext(i, S.soc[i], b[i])));
+      var sv = S.soc[i] < BAND[0] * MG[i].e - 1e-6 || S.soc[i] > BAND[1] * MG[i].e + 1e-6;
+      frame.soc.push(S.soc[i]); frame.curt.push(curt); frame.uns.push(uns); frame.socViol.push(sv);
+      if (sv) { S.tot.socViol++; S.tot.viol++; }
+      stepUns += uns * DT; stepCurt += curt * DT;
+    }
+    var subRes = inflow[SUB] + imp - exp; // substation: import in, export out, net link outflow
+    maxRes = Math.max(maxRes, Math.abs(subRes));
+    LINKS.forEach(function (l, j) {
+      var ov = Math.abs(linkFlow[j]) > l.cap + 1e-6;
+      frame.linkViol.push(ov);
+      if (ov) { S.tot.linkViol++; S.tot.viol++; }
+    });
+    S.tot.unserved += stepUns; S.tot.curt += stepCurt; S.tot.imp += imp * DT; S.tot.exp += exp * DT;
+    S.maxResidual = Math.max(S.maxResidual, maxRes);
+    frame.tot = JSON.parse(JSON.stringify(S.tot)); frame.residual = maxRes;
+    S.hist.push({ k: k, uns: S.tot.unserved, viol: S.tot.viol });
+    return frame;
+  }
+
+  function runDay(mode, shield, events) {
+    var S = newState(mode, shield), frames = [];
+    for (var k = 0; k < STEPS; k++) frames.push(step(S, k, events));
+    return { S: S, frames: frames };
+  }
+
+  return { MG: MG, LINKS: LINKS, SUB: SUB, STEPS: STEPS, DT: DT, START: START, IMPORT_MAX: IMPORT_MAX, EXPORT_MAX: EXPORT_MAX,
+           BAND: BAND, ROUNDS: ROUNDS, HOPS: HOPS, label: label, clock: clock, data: data, newState: newState, step: step, runDay: runDay, maxflow: maxflow };
+})();
+if (typeof module !== 'undefined') module.exports = CityEngine;
+</script>
+<script>
+(function () {
+  'use strict';
+  var E = CityEngine, $ = function (id) { return document.getElementById(id); };
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var view = 'decentral', shield = true, speed = 1, playing = false, k = 0, events = [], timer = null, arm = null;
+  var S = {}, F = {}, uns = { central: [], decentral: [] };
+
+  function reset(keepEvents) {
+    if (!keepEvents) events = [];
+    S.central = E.newState('central', shield); S.decentral = E.newState('decentral', shield);
+    F.central = null; F.decentral = null; uns = { central: [], decentral: [] }; k = 0;
+    advance(); renderLog();
+  }
+  function advance() {
+    if (k >= E.STEPS) { pause(); return; }
+    S.central.shield = shield; S.decentral.shield = shield;
+    F.central = E.step(S.central, k, events); F.decentral = E.step(S.decentral, k, events);
+    uns.central.push(F.central.tot.unserved); uns.decentral.push(F.decentral.tot.unserved);
+    k++; renderScore(); drawChart();
+  }
+  // Re-run from 06:00 up to the current step with the same events (used after a change)
+  function replayTo(target) {
+    S.central = E.newState('central', shield); S.decentral = E.newState('decentral', shield);
+    uns = { central: [], decentral: [] }; k = 0;
+    while (k < target) advance();
+  }
+  function play() { if (playing) { pause(); return; } if (k >= E.STEPS) reset(true); playing = true; $('play').textContent = 'Pause'; tick(); }
+  function pause() { playing = false; $('play').textContent = k >= E.STEPS ? 'Play again' : 'Play'; if (timer) { clearTimeout(timer); timer = null; } }
+  function tick() { if (!playing) return; advance(); timer = setTimeout(tick, (reduce ? 120 : 520) / speed); }
+
+  function addEvent(e) {
+    events.push(e); renderLog();
+    // events apply from the step that is about to run; the past stays as it was
+    renderScore();
+  }
+  function renderLog() {
+    var names = { cloud: 'Cloud burst (2 h)', cut: 'Link cut', agent: 'Agent down', cc: 'Control centre down', trip: 'Substation trip (3 h)' };
+    if (!events.length) { $('log').innerHTML = '<span>No events yet. The day is calm.</span>'; return; }
+    $('log').innerHTML = events.slice().sort(function (a, b) { return a.k - b.k; }).map(function (e) {
+      var tgt = e.type === 'cut' ? ' ' + linkName(e.target) : (e.type === 'agent' ? ' ' + E.MG[e.target].id : '');
+      return '<span><b>' + E.label(e.k) + '</b> ' + names[e.type] + tgt + '</span>';
+    }).join('');
+  }
+  function linkName(j) { var l = E.LINKS[j]; var n = function (q) { return q === E.SUB ? 'Substation' : E.MG[q].id; }; return n(l.a) + '–' + n(l.b); }
+
+  function renderScore() {
+    var c = F.central, d = F.decentral; if (!c) return;
+    function row(name, a, b, fmt, lowGood) {
+      var ca = '', cb = '';
+      if (Math.abs(a - b) > 0.05 * Math.max(1, Math.abs(a), Math.abs(b))) { var aw = lowGood ? a < b : a > b; ca = aw ? 'win' : 'lose'; cb = aw ? 'lose' : 'win'; }
+      return '<tr><td>' + name + '</td><td class="' + ca + '">' + fmt(a) + '</td><td class="' + cb + '">' + fmt(b) + '</td></tr>';
+    }
+    var kwh = function (v) { return v.toFixed(0) + ' kWh'; }, n = function (v) { return String(v); };
+    var on = function (f) { return f.status.filter(function (s) { return s === 'on'; }).length; };
+    var linksUp = function (f) { return f.D.linkUp.filter(Boolean).length; };
+    $('score').innerHTML =
+      row('Unserved energy', c.tot.unserved, d.tot.unserved, kwh, true) +
+      row('Grid import', c.tot.imp, d.tot.imp, kwh, true) +
+      row('Limit breaches', c.tot.viol, d.tot.viol, n, true) +
+      row('Units under control', on(c), on(d), function (v) { return v + ' / 10'; }, false) +
+      '<tr><td>Links in service</td><td>' + linksUp(c) + ' / 13</td><td>' + linksUp(d) + ' / 13</td></tr>' +
+      '<tr><td>Grid</td><td colspan="2" style="text-align:center">' + (c.D.subUp ? 'connected' : 'TRIPPED: island mode') + (c.D.ccUp ? '' : ' · control centre lost') + '</td></tr>';
+    var f = F[view], served = f.uns.filter(function (u) { return u < 0.05; }).length;
+    $('lights').innerHTML = served + ' of 10 <small>microgrids fully served now · ' + (view === 'central' ? 'central' : 'decentral') + ' view</small>';
+    $('lights').style.color = served < 10 ? 'var(--bad)' : 'var(--ink)';
+    $('clock').textContent = E.label(Math.max(0, k - 1));
+  }
+
+  // ---------- map ----------
+  var cv = $('map'), g = cv.getContext('2d'), W = 760, H = 600, CX = 380, CY = 318, RR = 220;
+  function fit() { var d = Math.min(2, window.devicePixelRatio || 1); cv.width = W * d; cv.height = H * d; g.setTransform(d, 0, 0, d, 0, 0); }
+  var POS = E.MG.map(function (m, i) { var a = -Math.PI / 2 + 2 * Math.PI * i / 10; return [CX + RR * Math.cos(a), CY + RR * Math.sin(a)]; });
+  POS.push([CX, CY]);
+  var parts = [], lastTs = 0;
+  function glyph(type, x, y, col) {
+    g.fillStyle = col;
+    if (type === 'R' || type === 'M') { for (var j = -1; j <= 1; j++) { g.beginPath(); g.moveTo(x + j * 11 - 6, y + 2); g.lineTo(x + j * 11, y - 6); g.lineTo(x + j * 11 + 6, y + 2); g.closePath(); g.fill(); g.fillRect(x + j * 11 - 4.5, y + 2, 9, 7); } }
+    if (type === 'C' || type === 'M') { g.fillRect(x - 6 + (type === 'M' ? 14 : 0), y - 12, 12, 22); }
+    if (type === 'U') { g.fillRect(x - 14, y - 2, 28, 12); g.beginPath(); g.moveTo(x - 16, y - 2); g.lineTo(x, y - 12); g.lineTo(x + 16, y - 2); g.closePath(); g.fill(); }
+    if (type === 'I') { g.fillRect(x - 14, y - 2, 28, 12); g.fillRect(x + 6, y - 14, 5, 12); g.beginPath(); g.moveTo(x - 14, y - 2); g.lineTo(x - 7, y - 8); g.lineTo(x - 7, y - 2); g.lineTo(x, y - 8); g.lineTo(x, y - 2); g.closePath(); g.fill(); }
+  }
+  function drawMap(ts) {
+    var dt = Math.min(0.05, ((ts || 0) - lastTs) / 1000 || 0); lastTs = ts || 0;
+    var f = F[view]; if (!f) { requestAnimationFrame(drawMap); return; }
+    var D = f.D, c = D.c, day = c >= 6.5 && c < 18.5;
+    var bg = g.createRadialGradient(CX, CY, 40, CX, CY, 420);
+    bg.addColorStop(0, day ? '#0f2c55' : '#0a1a36'); bg.addColorStop(1, '#050d1f');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    g.strokeStyle = 'rgba(147,171,203,0.06)'; g.lineWidth = 1;
+    for (var x = 0; x < W; x += 32) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+    for (var y = 0; y < H; y += 32) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    // control centre (central view)
+    if (view === 'central') {
+      var ccx = 64, ccy = 64;
+      E.MG.forEach(function (m, i) {
+        g.strokeStyle = D.ccUp ? 'rgba(245,158,11,0.22)' : 'rgba(251,113,133,0.10)'; g.setLineDash([3, 6]); g.lineWidth = 1;
+        g.beginPath(); g.moveTo(ccx, ccy); g.lineTo(POS[i][0], POS[i][1]); g.stroke(); g.setLineDash([]);
+      });
+      g.fillStyle = D.ccUp ? '#f59e0b' : '#fb7185'; g.beginPath(); g.rect(ccx - 22, ccy - 16, 44, 32); g.fill();
+      g.fillStyle = '#061326'; g.font = '700 12px "IBM Plex Mono", monospace'; g.fillText('CTRL', ccx - 15, ccy + 4);
+      g.fillStyle = D.ccUp ? '#f59e0b' : '#fb7185'; g.font = '600 12px "IBM Plex Sans", sans-serif';
+      g.fillText(D.ccUp ? 'Control centre online' : 'Control centre LOST', ccx - 22, ccy + 32);
+    } else {
+      g.fillStyle = '#22d3ee'; g.font = '600 12px "IBM Plex Sans", sans-serif'; g.fillText('No control centre: agents talk to neighbours', 16, 28);
+    }
+    // links
+    E.LINKS.forEach(function (l, j) {
+      var a = POS[l.a], b = POS[l.b], fl = f.flow[j], up = D.linkUp[j], over = f.linkViol[j];
+      if (!up) {
+        g.strokeStyle = 'rgba(147,171,203,0.35)'; g.setLineDash([5, 6]); g.lineWidth = 2; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.setLineDash([]);
+        var mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2; g.strokeStyle = '#fb7185'; g.lineWidth = 3;
+        g.beginPath(); g.moveTo(mx - 7, my - 7); g.lineTo(mx + 7, my + 7); g.moveTo(mx + 7, my - 7); g.lineTo(mx - 7, my + 7); g.stroke();
+        return;
+      }
+      var u = Math.min(1.6, Math.abs(fl) / l.cap);
+      g.strokeStyle = over ? '#fb7185' : (l.kind === 'feeder' ? 'rgba(167,139,250,0.55)' : 'rgba(34,211,238,0.35)');
+      g.lineWidth = over ? 7 : 2 + 5 * u;
+      g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+      if (Math.abs(fl) > 0.5) {
+        var dir = fl > 0 ? 1 : -1;
+        if (!reduce && Math.random() < dt * (3 + 10 * Math.min(1, u))) parts.push({ j: j, t: 0, dir: dir, sp: 0.35 + 0.5 * Math.min(1, u) });
+        var lab = Math.abs(fl).toFixed(0) + ' kW', lx = a[0] + (b[0] - a[0]) * 0.5, ly = a[1] + (b[1] - a[1]) * 0.5;
+        g.fillStyle = over ? '#fb7185' : '#93abcb'; g.font = '11px "IBM Plex Mono", monospace'; g.fillText(lab, lx + 6, ly - 6);
+      }
+    });
+    for (var p = parts.length - 1; p >= 0; p--) {
+      var q = parts[p], l = E.LINKS[q.j], fl2 = f.flow[q.j];
+      q.t += q.sp * dt * 1.2;
+      if (q.t >= 1 || !D.linkUp[q.j] || Math.abs(fl2) < 0.5 || (fl2 > 0 ? 1 : -1) !== q.dir) { parts.splice(p, 1); continue; }
+      var a2 = q.dir > 0 ? POS[l.a] : POS[l.b], b2 = q.dir > 0 ? POS[l.b] : POS[l.a];
+      var px = a2[0] + (b2[0] - a2[0]) * q.t, py = a2[1] + (b2[1] - a2[1]) * q.t;
+      g.fillStyle = f.linkViol[q.j] ? '#fb7185' : (l.kind === 'feeder' ? '#c4b5fd' : '#22d3ee'); g.beginPath(); g.arc(px, py, 3, 0, 7); g.fill();
+    }
+    // substation
+    var sx = CX, sy = CY;
+    g.fillStyle = D.subUp ? '#0f2850' : 'rgba(251,113,133,0.25)'; g.strokeStyle = D.subUp ? '#a78bfa' : '#fb7185'; g.lineWidth = 2;
+    g.beginPath(); g.arc(sx, sy, 38, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = D.subUp ? '#c4b5fd' : '#fb7185'; g.lineWidth = 2; g.beginPath();
+    g.moveTo(sx - 12, sy + 18); g.lineTo(sx, sy - 20); g.lineTo(sx + 12, sy + 18); g.moveTo(sx - 9, sy + 4); g.lineTo(sx + 9, sy + 4); g.moveTo(sx - 15, sy - 10); g.lineTo(sx + 15, sy - 10); g.stroke();
+    g.fillStyle = '#e9f2ff'; g.font = '600 12px "IBM Plex Sans", sans-serif'; g.textAlign = 'center';
+    g.fillText(D.subUp ? 'Grid ' + f.imp.toFixed(0) + ' kW in' : 'GRID TRIPPED', sx, sy + 58); g.textAlign = 'left';
+    // microgrids
+    E.MG.forEach(function (m, i) {
+      var P = POS[i], on = f.status[i] === 'on', un = f.uns[i] > 0.05, sv = f.socViol[i];
+      var r = 34, frac = f.soc[i] / m.e;
+      var blink = un ? 0.55 + 0.45 * Math.abs(Math.sin((ts || 0) / 180)) : 1;
+      g.fillStyle = on ? '#0f2850' : '#1a2233';
+      g.beginPath(); g.arc(P[0], P[1], r, 0, 7); g.fill();
+      g.lineWidth = 3; g.strokeStyle = un ? 'rgba(251,113,133,' + blink.toFixed(2) + ')' : (on ? '#2c5a91' : '#4b5567');
+      g.beginPath(); g.arc(P[0], P[1], r, 0, 7); g.stroke();
+      // SoC ring
+      g.lineWidth = 5; g.strokeStyle = sv ? '#f59e0b' : '#22d3ee';
+      g.beginPath(); g.arc(P[0], P[1], r + 7, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * frac); g.stroke();
+      g.strokeStyle = 'rgba(233,242,255,0.35)'; g.lineWidth = 1;
+      [0.1, 0.9].forEach(function (bd) { var aa = -Math.PI / 2 + 2 * Math.PI * bd; g.beginPath(); g.moveTo(P[0] + (r + 3) * Math.cos(aa), P[1] + (r + 3) * Math.sin(aa)); g.lineTo(P[0] + (r + 11) * Math.cos(aa), P[1] + (r + 11) * Math.sin(aa)); g.stroke(); });
+      glyph(m.type, P[0], P[1] - 4, on ? (un ? '#fb7185' : '#cfe3ff') : '#6b7689');
+      g.fillStyle = '#e9f2ff'; g.font = '700 13px "IBM Plex Mono", monospace'; g.textAlign = 'center';
+      g.fillText(m.id, P[0], P[1] + 22);
+      var lx = P[0] + (P[0] - CX) * 0.32, ly = P[1] + (P[1] - CY) * 0.32;
+      g.font = '11px "IBM Plex Mono", monospace'; g.fillStyle = '#93abcb';
+      g.fillText('☀ ' + D.pv[i].toFixed(0) + '  ⌂ ' + D.ld[i].toFixed(0) + ' kW', lx, ly + 4);
+      g.fillText('SoC ' + Math.round(100 * frac) + ' %', lx, ly + 18);
+      var ix = P[0] + (CX - P[0]) * 0.36, iy = P[1] + (CY - P[1]) * 0.36 + 4;
+      if (!on) { g.fillStyle = '#fb7185'; g.font = '700 12px "IBM Plex Sans", sans-serif'; g.fillText(view === 'central' && !D.ccUp ? 'NO COMMAND' : 'AGENT DOWN', ix, iy); }
+      if (un) { g.fillStyle = '#fb7185'; g.font = '700 12px "IBM Plex Sans", sans-serif'; g.fillText('SHORT ' + f.uns[i].toFixed(0) + ' kW', ix, iy + (on ? 0 : 14)); }
+      g.textAlign = 'left';
+    });
+    // weather and clock
+    g.fillStyle = D.cloud ? '#c8d6eb' : (day ? '#facc15' : '#dbe7ff'); g.font = '700 14px "IBM Plex Sans", sans-serif';
+    g.fillText(D.cloud ? 'Cloud burst: solar at 25 %' : (day ? 'Clear sky' : 'Night'), W - 200, 28);
+    g.fillStyle = 'rgba(233,242,255,0.92)'; g.font = '700 34px "Barlow Condensed", sans-serif'; g.fillText(f.label, W - 92, H - 18);
+    if (!shield) { g.fillStyle = '#f59e0b'; g.font = '700 14px "IBM Plex Sans", sans-serif'; g.fillText('SHIELD OFF: raw actions reach the hardware', 16, H - 22); }
+    requestAnimationFrame(drawMap);
+  }
+
+  // tap selection for link cut and agent down
+  cv.addEventListener('click', function (e) {
+    if (!arm) return;
+    var r = cv.getBoundingClientRect(), mx = (e.clientX - r.left) * W / r.width, my = (e.clientY - r.top) * H / r.height;
+    if (arm === 'agent') {
+      var best = -1, bd = 60;
+      POS.slice(0, 10).forEach(function (P, i) { var d = Math.hypot(P[0] - mx, P[1] - my); if (d < bd) { bd = d; best = i; } });
+      if (best >= 0) { addEvent({ type: 'agent', k: k, target: best }); disarm(); }
+    } else if (arm === 'cut') {
+      var bj = -1, bdist = 26;
+      E.LINKS.forEach(function (l, j) {
+        var a = POS[l.a], b = POS[l.b], vx = b[0] - a[0], vy = b[1] - a[1], t = Math.max(0, Math.min(1, ((mx - a[0]) * vx + (my - a[1]) * vy) / (vx * vx + vy * vy)));
+        var d = Math.hypot(a[0] + t * vx - mx, a[1] + t * vy - my); if (d < bdist) { bdist = d; bj = j; }
+      });
+      if (bj >= 0) { addEvent({ type: 'cut', k: k, target: bj }); disarm(); }
+    }
+  });
+  function armFor(kind, btn, text) {
+    if (arm === kind) { // second press: pick a sensible default
+      addEvent(kind === 'cut' ? { type: 'cut', k: k, target: 2 } : { type: 'agent', k: k, target: 4 }); disarm(); return;
+    }
+    disarm(); arm = kind; btn.classList.add('arm'); $('hint').textContent = text + ' (press the button again for a default choice)'; $('hint').classList.add('show');
+  }
+  function disarm() { arm = null; $('evCut').classList.remove('arm'); $('evAgent').classList.remove('arm'); $('hint').classList.remove('show'); }
+
+  // ---------- chart ----------
+  function drawChart() {
+    var c = $('cUns'), r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
+    c.width = Math.max(10, r.width * d); c.height = Math.max(10, r.height * d);
+    var x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0);
+    var w = r.width, h = r.height, L = 48, R = 10, T = 10, B = 22;
+    x.clearRect(0, 0, w, h);
+    var ymax = Math.max(100, Math.ceil(Math.max(uns.central[uns.central.length - 1] || 0, uns.decentral[uns.decentral.length - 1] || 0) / 250) * 250);
+    var X = function (i) { return L + (w - L - R) * i / E.STEPS; }, Y = function (v) { return T + (h - T - B) * (1 - v / ymax); };
+    x.font = '11px "IBM Plex Mono", monospace'; x.fillStyle = '#93abcb'; x.strokeStyle = 'rgba(147,171,203,0.14)';
+    var st = ymax / 4;
+    for (var v = 0; v <= ymax + 1e-6; v += st) { x.beginPath(); x.moveTo(L, Y(v)); x.lineTo(w - R, Y(v)); x.stroke(); x.fillText(v.toFixed(0), 4, Y(v) + 4); }
+    for (var i = 0; i <= E.STEPS; i += 24) x.fillText(E.label(i % 96), Math.min(w - 40, X(i) - 15), h - 6);
+    events.forEach(function (e) { x.strokeStyle = 'rgba(251,113,133,0.5)'; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(X(e.k), T); x.lineTo(X(e.k), h - B); x.stroke(); x.setLineDash([]); });
+    [['central', '#f59e0b'], ['decentral', '#22d3ee']].forEach(function (s) {
+      var a = uns[s[0]]; if (!a.length) return;
+      x.strokeStyle = s[1]; x.lineWidth = 2.5; x.beginPath();
+      a.forEach(function (val, j) { if (j === 0) x.moveTo(X(j + 1), Y(val)); else x.lineTo(X(j + 1), Y(val)); }); x.stroke();
+      x.fillStyle = s[1]; x.beginPath(); x.arc(X(a.length), Y(a[a.length - 1]), 4, 0, 7); x.fill();
+    });
+  }
+
+  // ---------- controls ----------
+  Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function (b) {
+    b.addEventListener('click', function () { view = b.dataset.mode; Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); }); renderScore(); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sp]'), function (b) {
+    b.addEventListener('click', function () { speed = parseInt(b.dataset.sp, 10); Array.prototype.forEach.call(document.querySelectorAll('[data-sp]'), function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); }); });
+  });
+  $('shield').addEventListener('click', function () {
+    shield = !shield; this.setAttribute('aria-checked', shield ? 'true' : 'false');
+    this.lastChild.textContent = shield ? 'Safety shield ON' : 'Safety shield OFF';
+  });
+  $('play').addEventListener('click', play);
+  $('reset').addEventListener('click', function () { pause(); reset(false); });
+  $('evUndo').addEventListener('click', function () { pause(); reset(false); });
+  $('evCloud').addEventListener('click', function () { addEvent({ type: 'cloud', k: k, dur: 8 }); });
+  $('evCC').addEventListener('click', function () { if (!events.some(function (e) { return e.type === 'cc'; })) addEvent({ type: 'cc', k: k }); });
+  $('evTrip').addEventListener('click', function () { addEvent({ type: 'trip', k: k, dur: 12 }); });
+  $('evCut').addEventListener('click', function () { armFor('cut', this, 'Tap a link on the map to cut it'); });
+  $('evAgent').addEventListener('click', function () { armFor('agent', this, 'Tap a microgrid to take its agent down'); });
+  $('storm').addEventListener('click', function () {
+    pause();
+    var at = function (h) { return Math.round((h - 6) * 4); };
+    events = [{ type: 'cloud', k: at(12), dur: 8 }, { type: 'cut', k: at(15), target: 2 }, { type: 'trip', k: at(18.5), dur: 12 }, { type: 'cc', k: at(19) }];
+    replayTo(at(17)); renderLog(); speed = 4;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-sp]'), function (o) { o.setAttribute('aria-pressed', o.dataset.sp === '4' ? 'true' : 'false'); });
+  });
+  window.addEventListener('resize', function () { fit(); drawChart(); });
+  fit(); reset(false); requestAnimationFrame(drawMap);
+})();
+</script>
+</body>
+</html>

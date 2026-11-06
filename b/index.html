@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why Selfish Agents Crash the Grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Night-shift feeder console: navy base, cyan EV load, rose for overload, green for within rating. */
+  --bg: #061326;
+  --panel: #0b1f3a;
+  --panel-2: #0f2850;
+  --line: #1d3d68;
+  --ink: #e9f2ff;
+  --muted: #93abcb;
+  --accent: #22d3ee;
+  --base: #4c6a94;
+  --bad: #fb7185;
+  --good: #4ade80;
+  --warn: #f59e0b;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* Layout: controls, then street view beside the load chart, then the three-mode scorecard. */
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+header { display: grid; gap: 4px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1; margin: 0; text-wrap: balance; }
+.tag { color: var(--muted); margin: 2px 0 0; font-size: 15px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.ctl { padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.slider { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.slider label { font-size: 13px; color: var(--muted); }
+.slider output { font-family: var(--font-display); font-size: 40px; font-weight: 700; min-width: 3.2ch; text-align: right; }
+.slider output small { font-family: var(--font-body); font-size: 13px; font-weight: 400; color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.seg button { font: 600 14px var(--font-body); color: var(--muted); background: var(--panel-2); border: 0; padding: 11px 14px; cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #032031; }
+.seg button:focus-visible, .btn:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 12px; align-items: center; }
+.btn { font: 600 14px var(--font-body); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: #032031; border-color: var(--accent); }
+.status { margin-left: auto; font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.main canvas { display: block; width: 100%; height: auto; border-radius: 14px; }
+.chart { padding: 12px; display: grid; gap: 6px; }
+.chart h3 { margin: 0; font-size: 14px; color: var(--muted); font-weight: 600; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.legend { display: inline-flex; gap: 12px; flex-wrap: wrap; font-weight: 400; font-size: 12px; }
+.legend i { display: inline-block; width: 16px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+#cLoad { height: 360px; }
+.score { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.mode { padding: 14px; display: grid; gap: 8px; border-width: 2px; cursor: pointer; }
+.mode.sel { border-color: var(--accent); }
+.mode h4 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pill { font: 600 11px var(--font-mono); letter-spacing: .06em; padding: 4px 8px; border-radius: 99px; }
+.pill.bad { background: rgba(251,113,133,.16); color: var(--bad); border: 1px solid var(--bad); }
+.pill.good { background: rgba(74,222,128,.14); color: var(--good); border: 1px solid var(--good); }
+.big { font-family: var(--font-display); font-size: 46px; font-weight: 700; line-height: 1; }
+.big small { font-family: var(--font-body); font-size: 13px; font-weight: 400; color: var(--muted); }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 13px; color: var(--muted); }
+.kv b { color: var(--ink); font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.mode p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
+details { padding: 12px 16px; }
+details summary { cursor: pointer; font-weight: 600; }
+details .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.eq { font-family: var(--font-mono); color: var(--ink); background: #0a1a33; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: block; margin: 6px 0; font-size: 13px; overflow-x: auto; white-space: nowrap; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 4px 0 10px; }
+@media (max-width: 900px) { .main, .score, details .cols { grid-template-columns: 1fr; } .ctl { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .seg button { padding: 10px 8px; font-size: 12px; } .big { font-size: 38px; } #cLoad { height: 300px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Episode 4 · Coordination between agents</span>
+    <h1>Why Selfish Agents Crash the Grid</h1>
+    <p class="tag">One 250 kVA transformer. 110 homes. Up to 120 EVs that each want the cheapest charge. Three ways to charge.</p>
+  </header>
+
+  <div class="card">
+    <div class="ctl">
+      <div class="slider">
+        <label for="n">EVs on this feeder</label>
+        <input type="range" id="n" min="0" max="120" step="1" value="40">
+        <output id="nOut" for="n">40 <small>EVs</small></output>
+      </div>
+      <div class="seg" role="group" aria-label="Charge mode">
+        <button data-m="plug" aria-pressed="false">Plug in and charge</button>
+        <button data-m="timer" aria-pressed="true">Cheap-hour timer</button>
+        <button data-m="coord" aria-pressed="false">Coordinated</button>
+      </div>
+    </div>
+    <div class="btns">
+      <button class="btn primary" id="play">Play the night</button>
+      <button class="btn" id="nego">Show the negotiation</button>
+      <span class="status" id="status">22:00 · cheap hours start</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="card"><canvas id="street" width="720" height="460" aria-label="Street view with homes, EVs and the transformer gauge"></canvas></div>
+    <div class="card chart">
+      <h3>Transformer load (kW)<span class="legend"><span><i style="background:#4c6a94"></i>homes</span><span><i style="background:#22d3ee"></i>EVs</span><span><i style="background:#fb7185"></i>above rating</span></span></h3>
+      <canvas id="cLoad" aria-label="Transformer load over the night"></canvas>
+    </div>
+  </div>
+
+  <div class="score" id="score"></div>
+
+  <details class="card">
+    <summary>How the coordinated mode works (equations and checks)</summary>
+    <div class="cols">
+      <div>
+        <p><b>Goal of the utility.</b> Keep the total load as flat as possible. This is valley filling. Every EV must still get its energy before it leaves.</p>
+        <span class="eq">min  Σ_t ( D_t + Σ_n r_n,t )² Δt</span>
+        <span class="eq">s.t.  0 ≤ r_n,t ≤ r̄_n  inside the plug-in window,   Σ_t r_n,t Δt = R_n</span>
+        <p><b>Decentralized protocol</b> (Gan, Topcu and Low, IEEE Trans. Power Systems 28(2):940–951, 2013). In round k the utility broadcasts one signal. Each EV updates only its own plan.</p>
+        <span class="eq">p_t^k = D_t + Σ_n r_n,t^k            (broadcast)</span>
+        <span class="eq">r_n^k+1 = argmin_r∈F_n  p^k·r + ||r − r_n^k||² / (2β)  =  Π_F_n( r_n^k − β p^k ),  β = 1/N</span>
+      </div>
+      <div>
+        <p><b>Why it is decentralized.</b> An EV needs only the broadcast signal and its own arrival time, departure time and energy need. No EV reveals its plan to another EV.</p>
+        <p><b>Checks.</b> The result matches the central QP optimum (cvxpy with Clarabel) for 10 to 100 EVs, with a gap below 0.0001 %. About 20 rounds reach 0.01 % of the optimum.</p>
+        <p><b>Assumptions.</b> 110 homes with a synthetic evening-peak profile. Transformer 250 kVA at power factor 0.95, so 237.5 kW. Home chargers of 3.3 kW and 7.2 kW. Arrivals 16:30 to 22:30, departures 06:00 to 08:00, needs of 6 to 18 kWh. Charge rates are continuous. The cheap window opens at 22:00, and every timer starts at that moment.</p>
+        <p><b>Lesson.</b> A price that is the same for everyone moves the peak. A price that answers the total load removes it.</p>
+      </div>
+    </div>
+  </details>
+  <footer>ITSR FDP 2026 · Session 04 · Dr. Lilia Tightiz, Sejong University · Synthetic data, made for class use</footer>
+</div>
+
+<script>// EV herd engine: one distribution transformer, N homes, M EVs, three charge modes.
+// Coordinated mode: decentralized valley filling (Gan, Topcu and Low, IEEE TPWRS 28(2), 2013).
+var EVEngine = (function () {
+  'use strict';
+  var CFG = {
+    startH: 16, slots: 64, dt: 0.25,      // 16:00 to 08:00 in 15-min slots
+    homes: 110, ratingKVA: 250, pf: 0.95, // distribution transformer
+    todStartH: 22,                        // cheap window opens at 22:00
+    fast: 7.2, slow: 3.3                  // kW AC chargers
+  };
+  CFG.ratingKW = CFG.ratingKVA * CFG.pf;  // 237.5 kW
+
+  // Average kW per home after diversity, by clock hour (synthetic evening-peak shape)
+  var HOME = { 16: 0.90, 17: 1.10, 18: 1.40, 19: 1.65, 20: 1.75, 21: 1.65, 22: 1.35, 23: 1.00,
+               0: 0.72, 1: 0.58, 2: 0.52, 3: 0.50, 4: 0.52, 5: 0.62, 6: 0.85, 7: 1.00, 8: 1.00 };
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(r) { var u = 0, v = 0; while (u === 0) u = r(); while (v === 0) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  function clockOf(k) { var m = CFG.startH * 60 + k * 15; return (m / 60) % 24; }
+  function label(k) { var m = (CFG.startH * 60 + k * 15) % 1440; var h = Math.floor(m / 60), mi = m % 60; return (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi; }
+
+  function baseLoad() {
+    var D = new Float64Array(CFG.slots);
+    for (var k = 0; k < CFG.slots; k++) {
+      var c = clockOf(k), h0 = Math.floor(c), f = c - h0, h1 = (h0 + 1) % 24;
+      var v0 = HOME[h0], v1 = HOME[h1] !== undefined ? HOME[h1] : v0;
+      D[k] = CFG.homes * (v0 + (v1 - v0) * f);
+    }
+    return D;
+  }
+
+  // Fleet of up to 120 EVs; the first n are used, so the slider adds cars without reshuffling
+  function fleet(seed) {
+    var r = mulberry32(seed || 7), out = [];
+    for (var i = 0; i < 120; i++) {
+      var a = Math.min(22.5, Math.max(16.5, 18.5 + 1.0 * gauss(r)));      // arrival, clock hour
+      var d = Math.min(8.0, Math.max(6.0, 7.5 + 0.5 * gauss(r)));        // departure next morning
+      var rmax = r() < 0.5 ? CFG.fast : CFG.slow;
+      var ka = Math.ceil((a - CFG.startH) / CFG.dt);
+      var kd = Math.min(CFG.slots, Math.floor((d + 24 - CFG.startH) / CFG.dt));
+      var R = 6 + 12 * r();                                              // kWh needed tonight
+      R = Math.min(R, 0.95 * rmax * (kd - ka) * CFG.dt);
+      out.push({ id: i, ka: ka, kd: kd, rmax: rmax, R: Math.round(R * 10) / 10, arr: a, dep: d });
+    }
+    return out;
+  }
+
+  // Charge at full power from slot k0 until the energy is met
+  function greedyFrom(ev, k0) {
+    var r = new Float64Array(CFG.slots), need = ev.R;
+    for (var k = Math.max(k0, ev.ka); k < ev.kd && need > 1e-9; k++) {
+      var e = Math.min(ev.rmax * CFG.dt, need); r[k] = e / CFG.dt; need -= e;
+    }
+    return r;
+  }
+  function uncontrolled(evs) { return evs.map(function (ev) { return greedyFrom(ev, ev.ka); }); }
+  function todTimer(evs) {
+    var k0 = Math.round((CFG.todStartH - CFG.startH) / CFG.dt);
+    return evs.map(function (ev) { return greedyFrom(ev, k0); });
+  }
+
+  // Euclidean projection of v onto {0 <= r <= rmax in window, 0 outside, sum r*dt = R}
+  function project(v, ev) {
+    var r = new Float64Array(CFG.slots), lo = Infinity, hi = -Infinity, k;
+    for (k = ev.ka; k < ev.kd; k++) { if (v[k] < lo) lo = v[k]; if (v[k] > hi) hi = v[k]; }
+    lo -= ev.rmax + 1; hi += 1;
+    function energy(lam) {
+      var s = 0;
+      for (var j = ev.ka; j < ev.kd; j++) s += Math.min(ev.rmax, Math.max(0, v[j] - lam));
+      return s * CFG.dt;
+    }
+    for (var it = 0; it < 80; it++) {
+      var mid = 0.5 * (lo + hi);
+      if (energy(mid) > ev.R) lo = mid; else hi = mid;
+    }
+    var lam = 0.5 * (lo + hi);
+    for (k = ev.ka; k < ev.kd; k++) r[k] = Math.min(ev.rmax, Math.max(0, v[k] - lam));
+    return r;
+  }
+
+  function aggregate(D, profiles) {
+    var L = Float64Array.from(D);
+    profiles.forEach(function (p) { for (var k = 0; k < CFG.slots; k++) L[k] += p[k]; });
+    return L;
+  }
+
+  // Decentralized protocol. Utility broadcasts p^k = D + sum r^k. Each EV solves
+  // min p^k . r + (1/2 beta) ||r - r^k||^2 over its own set, which is a projection.
+  function coordinate(evs, D, rounds, start) {
+    var N = Math.max(1, evs.length), beta = 1 / N;
+    var prof = (start || todTimer(evs)).map(function (p) { return Float64Array.from(p); });
+    var hist = [aggregate(D, prof)];
+    for (var it = 0; it < rounds; it++) {
+      var p = aggregate(D, prof);                 // control signal (marginal cost of total load)
+      prof = prof.map(function (r, n) {
+        var v = new Float64Array(CFG.slots);
+        for (var k = 0; k < CFG.slots; k++) v[k] = r[k] - beta * p[k];
+        return project(v, evs[n]);
+      });
+      hist.push(aggregate(D, prof));
+    }
+    return { profiles: prof, history: hist };
+  }
+
+  function metrics(D, profiles, evs) {
+    var L = aggregate(D, profiles), peak = 0, over = 0, hrs = 0, sum = 0, sq = 0, k;
+    for (k = 0; k < CFG.slots; k++) {
+      peak = Math.max(peak, L[k]); sum += L[k];
+      if (L[k] > CFG.ratingKW) { over += (L[k] - CFG.ratingKW) * CFG.dt; hrs += CFG.dt; }
+      sq += L[k] * L[k] * CFG.dt;
+    }
+    var met = 0;
+    profiles.forEach(function (p, n) {
+      var e = 0; for (var j = 0; j < CFG.slots; j++) e += p[j] * CFG.dt;
+      if (e >= evs[n].R - 1e-3) met++;
+    });
+    var evE = 0; evs.forEach(function (ev) { evE += ev.R; });
+    return { load: L, peak: peak, pct: 100 * peak / CFG.ratingKW, overKWh: over, overH: hrs,
+             par: peak / (sum / CFG.slots), sq: sq, ready: met, n: evs.length, evKWh: evE };
+  }
+
+  function runAll(nEV, seed, rounds) {
+    var all = fleet(seed), evs = all.slice(0, nEV), D = baseLoad();
+    var u = uncontrolled(evs), td = todTimer(evs), co = coordinate(evs, D, rounds || 120, td);
+    return { evs: evs, D: D, modes: {
+      plug: { profiles: u, m: metrics(D, u, evs) },
+      timer: { profiles: td, m: metrics(D, td, evs) },
+      coord: { profiles: co.profiles, m: metrics(D, co.profiles, evs), history: co.history }
+    } };
+  }
+
+  return { CFG: CFG, baseLoad: baseLoad, fleet: fleet, uncontrolled: uncontrolled, todTimer: todTimer,
+           coordinate: coordinate, metrics: metrics, runAll: runAll, label: label, project: project, aggregate: aggregate };
+})();
+if (typeof module !== 'undefined') module.exports = EVEngine;
+</script>
+<script>
+(function () {
+  'use strict';
+  var E = EVEngine, C = E.CFG;
+  var $ = function (id) { return document.getElementById(id); };
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var N = 40, mode = 'timer', R = null, cursor = 24, playTimer = null, negoRound = null, negoTimer = null;
+  var NAMES = { plug: 'Plug in and charge', timer: 'Cheap-hour timer', coord: 'Coordinated' };
+  var NOTES = {
+    plug: 'Each EV starts at full power the moment it arrives. The evening peak grows.',
+    timer: 'Each EV waits for the cheap window and starts at 22:00. The herd moves the peak and makes it taller.',
+    coord: 'Each EV still decides alone, but a shared signal that rises with the total load fills the night valley.'
+  };
+
+  function recompute() {
+    stopAll();
+    R = E.runAll(N, 7, 120);
+    renderScore(); draw();
+  }
+  function renderScore() {
+    var html = '';
+    ['plug', 'timer', 'coord'].forEach(function (k) {
+      var m = R.modes[k].m, over = m.pct > 100.05;
+      html += '<div class="card mode' + (k === mode ? ' sel' : '') + '" data-m="' + k + '" role="button" tabindex="0" aria-label="Select ' + NAMES[k] + '">' +
+        '<h4>' + NAMES[k] + '<span class="pill ' + (over ? 'bad">OVERLOAD' : 'good">WITHIN RATING') + '</span></h4>' +
+        '<div class="big">' + m.pct.toFixed(0) + '%<small> peak of rating</small></div>' +
+        '<div class="kv"><span>Peak load</span><b>' + m.peak.toFixed(0) + ' kW</b>' +
+        '<span>Energy above rating</span><b>' + m.overKWh.toFixed(1) + ' kWh</b>' +
+        '<span>Time above rating</span><b>' + m.overH.toFixed(2) + ' h</b>' +
+        '<span>Peak to average</span><b>' + m.par.toFixed(2) + '</b>' +
+        '<span>Loss proxy Σ load²</span><b>' + (100 * m.sq / R.modes.plug.m.sq).toFixed(0) + ' %</b>' +
+        '<span>EVs ready by departure</span><b>' + m.ready + ' / ' + m.n + '</b></div>' +
+        '<p>' + NOTES[k] + '</p></div>';
+    });
+    $('score').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('.mode'), function (el) {
+      el.addEventListener('click', function () { setMode(el.dataset.m); });
+      el.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMode(el.dataset.m); } });
+    });
+  }
+  function setMode(m) {
+    stopNego(); mode = m;
+    Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) { b.setAttribute('aria-pressed', b.dataset.m === m ? 'true' : 'false'); });
+    renderScore(); draw();
+  }
+  function stopAll() { stopPlay(); stopNego(); }
+  function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; $('play').textContent = 'Play the night'; } }
+  function stopNego() { if (negoTimer) { clearInterval(negoTimer); negoTimer = null; } negoRound = null; }
+
+  function currentLoad() {
+    if (mode === 'coord' && negoRound !== null) return R.modes.coord.history[negoRound];
+    return R.modes[mode].m.load;
+  }
+
+  // ---------- chart ----------
+  function setup(c) {
+    var r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
+    c.width = Math.max(10, r.width * d); c.height = Math.max(10, r.height * d);
+    var g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); return { g: g, w: r.width, h: r.height };
+  }
+  function drawChart() {
+    var a = setup($('cLoad')), g = a.g, w = a.w, h = a.h;
+    g.clearRect(0, 0, w, h);
+    var L = 42, Rm = 10, T = 10, B = 22, S = C.slots;
+    var ymax = Math.max(300, Math.ceil(Math.max(R.modes.plug.m.peak, R.modes.timer.m.peak, R.modes.coord.m.peak) / 100) * 100);
+    var X = function (k) { return L + (w - L - Rm) * k / S; };
+    var Y = function (v) { return T + (h - T - B) * (1 - v / ymax); };
+    g.font = '11px "IBM Plex Mono", monospace'; g.fillStyle = '#93abcb'; g.strokeStyle = 'rgba(147,171,203,0.14)'; g.lineWidth = 1;
+    var step = ymax > 500 ? 200 : 100;
+    for (var v = 0; v <= ymax; v += step) { g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(w - Rm, Y(v)); g.stroke(); g.fillText(String(v), 4, Y(v) + 4); }
+    for (var k = 0; k <= S; k += 8) g.fillText(E.label(k % 64 === 0 && k > 0 ? 63 : k).replace('07:45', '08:00'), Math.min(w - 40, X(k) - 15), h - 6);
+    var D = R.D, tot = currentLoad();
+    // homes area
+    g.fillStyle = 'rgba(76,106,148,0.75)'; g.beginPath(); g.moveTo(X(0), Y(0));
+    for (k = 0; k < S; k++) { g.lineTo(X(k), Y(D[k])); g.lineTo(X(k + 1), Y(D[k])); }
+    g.lineTo(X(S), Y(0)); g.closePath(); g.fill();
+    // EV area
+    g.fillStyle = 'rgba(34,211,238,0.70)'; g.beginPath(); g.moveTo(X(0), Y(D[0]));
+    for (k = 0; k < S; k++) { g.lineTo(X(k), Y(tot[k])); g.lineTo(X(k + 1), Y(tot[k])); }
+    for (k = S - 1; k >= 0; k--) { g.lineTo(X(k + 1), Y(D[k])); g.lineTo(X(k), Y(D[k])); }
+    g.closePath(); g.fill();
+    // overload
+    g.fillStyle = 'rgba(251,113,133,0.85)';
+    for (k = 0; k < S; k++) if (tot[k] > C.ratingKW) g.fillRect(X(k), Y(tot[k]), X(k + 1) - X(k), Y(C.ratingKW) - Y(tot[k]));
+    // other modes as faint lines
+    ['plug', 'timer', 'coord'].forEach(function (m) {
+      if (m === mode) return;
+      var o = R.modes[m].m.load;
+      g.strokeStyle = 'rgba(233,242,255,0.35)'; g.setLineDash([3, 4]); g.lineWidth = 1.2; g.beginPath();
+      for (var j = 0; j < S; j++) { if (j === 0) g.moveTo(X(j), Y(o[j])); else g.lineTo(X(j), Y(o[j])); g.lineTo(X(j + 1), Y(o[j])); }
+      g.stroke(); g.setLineDash([]);
+    });
+    // rating
+    g.strokeStyle = '#fb7185'; g.lineWidth = 2; g.setLineDash([7, 5]); g.beginPath(); g.moveTo(L, Y(C.ratingKW)); g.lineTo(w - Rm, Y(C.ratingKW)); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#fb7185'; g.font = '600 12px "IBM Plex Mono", monospace'; g.fillText('rating 237.5 kW', L + 6, Y(C.ratingKW) - 6);
+    // cursor
+    g.strokeStyle = '#e9f2ff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(X(cursor + 0.5), T); g.lineTo(X(cursor + 0.5), h - B); g.stroke();
+    if (negoRound !== null) {
+      var pk = Math.max.apply(null, Array.prototype.slice.call(tot));
+      g.fillStyle = '#e9f2ff'; g.font = '700 20px "Barlow Condensed", sans-serif';
+      g.fillText('Round ' + negoRound + ' · peak ' + pk.toFixed(0) + ' kW', w - Rm - 210, T + 22);
+    }
+  }
+
+  // ---------- street ----------
+  var sc = $('street'), sx = sc.getContext('2d'), SW = 720, SH = 460;
+  function fitStreet() { var d = Math.min(2, window.devicePixelRatio || 1); sc.width = SW * d; sc.height = SH * d; sx.setTransform(d, 0, 0, d, 0, 0); }
+  var cols = 11, rows = 10, gx0 = 200, gy0 = 26, cw = 46, chh = 42;
+  function homeXY(i) { return [gx0 + (i % cols) * cw, gy0 + Math.floor(i / cols) * chh]; }
+  // EV i parks at home slot spread across the street
+  function evHome(i) { return (i * 37) % 110; }
+  var flick = 0;
+  function drawStreet(ts) {
+    flick = ts || 0;
+    var tot = currentLoad(), k = cursor, load = tot[k], pct = 100 * load / C.ratingKW, over = pct > 100.05;
+    var clock = E.label(k), hr = parseInt(clock, 10), night = hr >= 19 || hr < 6;
+    var g = sx.createLinearGradient(0, 0, 0, SH);
+    g.addColorStop(0, night ? '#050d1f' : '#0e2c57'); g.addColorStop(1, '#0a1a36');
+    sx.fillStyle = g; sx.fillRect(0, 0, SW, SH);
+    // feeder cables
+    var hot = over ? (0.55 + 0.45 * Math.abs(Math.sin(flick / 140))) : 0;
+    for (var r = 0; r < rows; r++) {
+      var y = gy0 + r * chh + 30;
+      sx.strokeStyle = over ? 'rgba(251,113,133,' + hot.toFixed(2) + ')' : 'rgba(34,211,238,0.35)';
+      sx.lineWidth = over ? 2.5 : 1.5;
+      sx.beginPath(); sx.moveTo(156, 266); sx.lineTo(188, y); sx.lineTo(gx0 + cols * cw - 6, y); sx.stroke();
+    }
+    // homes
+    var D = R.D, baseFrac = D[k] / 192.5;
+    for (var i = 0; i < 110; i++) {
+      var p = homeXY(i), x = p[0], yy = p[1];
+      sx.fillStyle = '#13305a'; sx.fillRect(x, yy + 10, 30, 18);
+      sx.beginPath(); sx.moveTo(x - 3, yy + 11); sx.lineTo(x + 15, yy); sx.lineTo(x + 33, yy + 11); sx.closePath(); sx.fill();
+      var lit = ((i * 7919) % 100) / 100 < baseFrac * 0.9;
+      sx.fillStyle = lit && night ? 'rgba(250,224,140,0.85)' : 'rgba(147,171,203,0.28)';
+      sx.fillRect(x + 5, yy + 14, 7, 6); sx.fillRect(x + 18, yy + 14, 7, 6);
+    }
+    // EVs
+    var prof = mode === 'coord' && negoRound !== null ? null : R.modes[mode].profiles;
+    for (var n = 0; n < R.evs.length; n++) {
+      var ev = R.evs[n], hp = homeXY(evHome(n)), ex = hp[0] + 31, ey = hp[1] + 18;
+      var present = k >= ev.ka && k < ev.kd;
+      if (!present) continue;
+      var e = 0, now = 0;
+      if (prof) { for (var j = 0; j <= k; j++) e += prof[n][j] * C.dt; now = prof[n][k]; }
+      var fr = Math.min(1, e / ev.R);
+      sx.fillStyle = '#0a1a33'; sx.strokeStyle = now > 0.01 ? '#22d3ee' : (fr > 0.999 ? '#4ade80' : '#5b7aa6'); sx.lineWidth = 1.2;
+      sx.beginPath(); sx.rect(ex, ey, 12, 8); sx.fill(); sx.stroke();
+      sx.fillStyle = fr > 0.999 ? '#4ade80' : '#22d3ee'; sx.fillRect(ex + 1, ey + 1, 10 * fr, 6);
+      if (now > 0.01) { sx.shadowColor = '#22d3ee'; sx.shadowBlur = 8; sx.fillRect(ex + 1, ey + 1, 10 * fr, 6); sx.shadowBlur = 0; }
+    }
+    // transformer
+    sx.fillStyle = '#0f2850'; sx.strokeStyle = over ? '#fb7185' : '#3b6aa6'; sx.lineWidth = 2;
+    sx.beginPath(); sx.rect(108, 236, 48, 60); sx.fill(); sx.stroke();
+    sx.fillStyle = '#93abcb'; sx.font = '600 11px "IBM Plex Mono", monospace'; sx.fillText('250 kVA', 106, 312);
+    // gauge
+    var cxg = 92, cyg = 168, rg = 66, maxp = 300;
+    sx.lineWidth = 12; sx.lineCap = 'butt';
+    function arc(a0, a1, col) { sx.strokeStyle = col; sx.beginPath(); sx.arc(cxg, cyg, rg, Math.PI + Math.PI * a0 / maxp, Math.PI + Math.PI * a1 / maxp); sx.stroke(); }
+    arc(0, 80, 'rgba(74,222,128,0.75)'); arc(80, 100, 'rgba(245,158,11,0.85)'); arc(100, 300, 'rgba(251,113,133,0.85)');
+    var ang = Math.PI + Math.PI * Math.min(maxp, pct) / maxp;
+    sx.strokeStyle = '#e9f2ff'; sx.lineWidth = 3; sx.beginPath(); sx.moveTo(cxg, cyg); sx.lineTo(cxg + (rg - 4) * Math.cos(ang), cyg + (rg - 4) * Math.sin(ang)); sx.stroke();
+    sx.fillStyle = '#e9f2ff'; sx.beginPath(); sx.arc(cxg, cyg, 5, 0, 7); sx.fill();
+    sx.fillStyle = over ? '#fb7185' : '#e9f2ff'; sx.font = '700 34px "Barlow Condensed", sans-serif';
+    sx.textAlign = 'center'; sx.fillText(pct.toFixed(0) + '%', cxg, cyg + 34); sx.textAlign = 'left';
+    sx.fillStyle = '#93abcb'; sx.font = '500 12px "IBM Plex Sans", sans-serif'; sx.fillText('of rating', 66, cyg + 50);
+    sx.font = '11px "IBM Plex Mono", monospace'; sx.fillText('0 %', 14, cyg + 18); sx.fillText('300 %', 136, cyg + 18);
+    // clock
+    sx.fillStyle = '#e9f2ff'; sx.font = '700 38px "Barlow Condensed", sans-serif'; sx.fillText(clock, 22, 44);
+    sx.fillStyle = '#93abcb'; sx.font = '600 13px "IBM Plex Mono", monospace'; sx.fillText(load.toFixed(0) + ' kW now', 104, 42);
+    if (over) { sx.fillStyle = '#fb7185'; sx.font = '700 20px "Barlow Condensed", sans-serif'; sx.fillText('OVERLOAD', 96, 342); }
+    // legend
+    sx.font = '12px "IBM Plex Sans", sans-serif'; sx.fillStyle = '#93abcb';
+    sx.fillText('Tile = home, bar = EV', 14, 376);
+    sx.fillStyle = '#22d3ee'; sx.fillText('cyan glow: charge now', 14, 396);
+    sx.fillStyle = '#4ade80'; sx.fillText('green: full', 14, 416);
+    sx.fillStyle = '#5b7aa6'; sx.fillText('grey edge: waits', 14, 436);
+    requestAnimationFrame(drawStreet);
+  }
+
+  function draw() {
+    $('status').textContent = E.label(cursor) + (cursor === 24 ? ' · cheap hours start' : '') + ' · ' + NAMES[mode];
+    drawChart();
+  }
+
+  // ---------- controls ----------
+  $('n').addEventListener('input', function () { N = parseInt(this.value, 10); $('nOut').innerHTML = N + ' <small>EVs</small>'; recompute(); });
+  Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) { b.addEventListener('click', function () { setMode(b.dataset.m); }); });
+  $('play').addEventListener('click', function () {
+    if (playTimer) { stopPlay(); return; }
+    stopNego(); cursor = 0; $('play').textContent = 'Pause';
+    playTimer = setInterval(function () { cursor++; if (cursor >= C.slots - 1) { cursor = C.slots - 1; stopPlay(); } draw(); }, reduce ? 60 : 170);
+    draw();
+  });
+  $('nego').addEventListener('click', function () {
+    stopPlay(); if (mode !== 'coord') setMode('coord');
+    stopNego(); negoRound = 0; cursor = 24; draw();
+    negoTimer = setInterval(function () {
+      negoRound++;
+      if (negoRound >= 40) { clearInterval(negoTimer); negoTimer = null; setTimeout(function () { negoRound = null; draw(); }, 1200); }
+      draw();
+    }, reduce ? 80 : 260);
+  });
+  $('cLoad').addEventListener('click', function (e) {
+    var r = this.getBoundingClientRect(), L = 42, Rm = 10;
+    var k = Math.floor((e.clientX - r.left - L) / (r.width - L - Rm) * C.slots);
+    cursor = Math.max(0, Math.min(C.slots - 1, k)); draw();
+  });
+  window.addEventListener('resize', function () { fitStreet(); draw(); });
+  fitStreet(); recompute(); requestAnimationFrame(drawStreet);
+})();
+</script>
+</body>
+</html>
